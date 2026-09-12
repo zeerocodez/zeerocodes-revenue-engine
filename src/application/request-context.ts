@@ -23,7 +23,7 @@ export class MembershipIdentityResolver implements IdentityResolver {
 
   async resolve(identity: RequestIdentity): Promise<AuthenticatedRequestContext> {
     const membership = await this.memberships.authenticate(identity.userId, identity.tenantId);
-    return { userId: membership.id, tenantId: membership.tenantId, role: membership.role };
+    return { userId: membership.userId, tenantId: membership.tenantId, role: membership.role };
   }
 }
 
