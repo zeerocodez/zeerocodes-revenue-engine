@@ -9,6 +9,7 @@ export interface AppointmentRecord {
   status: AppointmentStatus;
   ownerUserId?: string;
   source?: string;
+  idempotencyKey?: string;
   metadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -23,6 +24,7 @@ export interface LeadOutcomeRecord {
   currency: string;
   reason?: string;
   ownerUserId?: string;
+  idempotencyKey?: string;
   occurredAt: string;
   metadata?: Record<string, unknown>;
 }
