@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { QualificationOrchestrator } from '../../src/application/qualification-orchestrator';
+import { createDefaultClientConfiguration } from '../../src/domain/client-configuration';
 import { MemoryLeadEventStore } from '../../src/integrations/memory-lead-events';
 import { MemoryLeadStore } from '../../src/integrations/memory-lead-store';
 
@@ -18,11 +19,13 @@ describe('QualificationOrchestrator', () => {
       updatedAt: new Date().toISOString(),
     });
 
+    const configuration = createDefaultClientConfiguration('org_1');
     const orchestrator = new QualificationOrchestrator(leads, events);
     const result = await orchestrator.process({
       leadId: 'lead_1',
       organizationId: 'org_1',
       text: 'Yes, I need the service and I can spend NGN 500k. I want to start tomorrow.',
+      configuration,
     });
 
     expect(result.extractedFields.serviceFit).toBe(true);
