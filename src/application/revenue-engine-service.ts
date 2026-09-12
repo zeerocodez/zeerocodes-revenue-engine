@@ -6,6 +6,7 @@ import type { LeadIntakeInput, LeadRecord } from '../domain/lead';
 import { scoreLead } from '../domain/scoring';
 import type { ClientQualificationPolicy } from '../domain/client-policy';
 import { evaluateClientPolicy } from '../domain/client-policy';
+import type { LeadEvent, LeadEventStore } from '../domain/lead-events';
 
 export interface LeadStore {
   get(id: string): Promise<LeadRecord | null>;
@@ -23,10 +24,33 @@ function id(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function toLeadEvent(
+  lead: LeadRecord,
+  type: LeadEvent['type'],
+  reason: string,
+  fromState?: LeadState,
+  toState?: LeadState,
+  metadata?: Record<string, unknown>,
+): LeadEvent {
+  return {
+    id: id('evt'),
+    leadId: lead.id,
+    organizationId: lead.organizationId,
+    type,
+    actor: 'system',
+    timestamp: new Date().toISOString(),
+    fromState,
+    toState,
+    reason,
+    metadata,
+  };
+}
+
 export class RevenueEngineService {
   constructor(
     private readonly store: LeadStore,
     private readonly policy?: ClientQualificationPolicy,
+    private readonly eventStore?: LeadEventStore,
   ) {}
 
   async intake(input: LeadIntakeInput): Promise<LeadDecisionResponse> {
@@ -84,6 +108,31 @@ export class RevenueEngineService {
       metadata: { score: score.score, qualified: policyResult.qualified, route: decision.route },
     });
 
+    await this.eventStore?.append(toLeadEvent(
+      lead,
+      'lead.created',
+      'lead captured',
+      undefined,
+      lead.state,
+      { source: input.source },
+    ));
+    await this.eventStore?.append(toLeadEvent(
+      lead,
+      'lead.scored',
+      decision.reason,
+      lead.state,
+      lead.state,
+      { score: score.score, band: score.band, qualified: policyResult.qualified },
+    ));
+    await this.eventStore?.append(toLeadEvent(
+      lead,
+      'lead.routed',
+      decision.reason,
+      lead.state,
+      lead.state,
+      { route: decision.route, action: decision.action },
+    ));
+
     return { lead, decision, auditEvent };
   }
 
@@ -105,12 +154,13 @@ export class RevenueEngineService {
       hardDisqualified: policyResult.hardDisqualified,
     });
 
-    const nextState: LeadState = decision.action === 'reject' ? 'invalid'
+    const desiredState: LeadState = decision.action === 'reject' ? 'invalid'
       : decision.action === 'nurture' ? 'nurture'
       : decision.action === 'closer-handoff' ? 'booked'
       : 'contacting';
 
-    lead.state = transitionLead(previousState, nextState);
+    const nextState = transitionLead(previousState, desiredState);
+    lead.state = nextState;
     lead.score = score.score;
     lead.qualification = { ...lead.qualification, score: score.score, qualified: policyResult.qualified, reasons: policyResult.reasons, hardDisqualified: policyResult.hardDisqualified };
     lead.decision = decision;
@@ -128,6 +178,34 @@ export class RevenueEngineService {
       source: lead.source,
       metadata: { score: score.score, qualified: policyResult.qualified, route: decision.route },
     });
+
+    await this.eventStore?.append(toLeadEvent(
+      lead,
+      'lead.scored',
+      'decision recalculated',
+      previousState,
+      nextState,
+      { score: score.score, band: score.band, qualified: policyResult.qualified },
+    ));
+    if (previousState !== nextState) {
+      await this.eventStore?.append(toLeadEvent(
+        lead,
+        'lead.state_changed',
+        decision.reason,
+        previousState,
+        nextState,
+        { route: decision.route, action: decision.action },
+      ));
+    }
+    await this.eventStore?.append(toLeadEvent(
+      lead,
+      decision.action === 'reject' ? 'lead.rejected' : 'lead.routed',
+      decision.reason,
+      nextState,
+      nextState,
+      { route: decision.route, action: decision.action },
+    ));
+
     return { lead, decision, auditEvent };
   }
 }
