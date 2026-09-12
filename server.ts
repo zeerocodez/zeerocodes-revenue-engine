@@ -19,7 +19,7 @@ const leadStore = new MemoryLeadStore();
 const leadEventStore = new MemoryLeadEventStore();
 const clientConfigurationStore = new MemoryClientConfigurationStore();
 const clientConfigurationService = new ClientConfigurationService(clientConfigurationStore);
-const revenueEngine = new RevenueEngineService(leadStore, undefined, leadEventStore);
+const revenueEngine = new RevenueEngineService(leadStore, undefined, leadEventStore, clientConfigurationService);
 const conversationService = new ConversationService(leadStore, new MemoryConversationStore(), new MemoryMessageStore());
 const qualificationOrchestrator = new QualificationOrchestrator(leadStore, leadEventStore);
 
@@ -108,46 +108,62 @@ app.get('/api/leads/:id/conversation', async (req, res) => {
     const tenantId = tenantIdFromRequest(req);
     return res.json(await conversationService.getConversation(req.params.id, tenantId));
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to load conversation';
-    return res.status(message === 'Tenant access denied' ? 403 : message.startsWith('Lead not found') ? 404 : 400).json({ error: message });
+    const message = error instanceof Error ? error.message : 'Conversation unavailable';
+    return res.status(message === 'Tenant access denied' ? 403 : 400).json({ error: message });
+  }
+});
+
+app.get('/api/leads/:id/messages', async (req, res) => {
+  try {
+    const tenantId = tenantIdFromRequest(req);
+    await revenueEngine.getLeadForOrganization(req.params.id, tenantId);
+    return res.json({ messages: await conversationService.listMessages(req.params.id, tenantId) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Messages unavailable';
+    return res.status(message === 'Tenant access denied' ? 403 : 400).json({ error: message });
   }
 });
 
 app.post('/api/leads/:id/messages', async (req, res) => {
   try {
     const tenantId = tenantIdFromRequest(req);
-    const lead = await revenueEngine.getLeadForOrganization(req.params.id, tenantId);
-    const result = await conversationService.sendMessage({ leadId: lead.id, organizationId: tenantId, body: String(req.body.body || ''), channel: req.body.channel, actor: req.body.actor });
-    return res.status(201).json(result);
+    return res.json(await conversationService.sendMessage({ ...req.body, leadId: req.params.id, organizationId: tenantId }));
   } catch (error) {
-    return res.status(tenantError(error)).json({ error: error instanceof Error ? error.message : 'Unable to send message' });
+    const message = error instanceof Error ? error.message : 'Unable to send message';
+    return res.status(message === 'Tenant access denied' ? 403 : 400).json({ error: message });
   }
 });
 
 app.post('/api/leads/:id/conversation-decision', async (req, res) => {
   try {
     const tenantId = tenantIdFromRequest(req);
+    await revenueEngine.getLeadForOrganization(req.params.id, tenantId);
     const configuration = await clientConfigurationService.get(tenantId);
-    const result = await qualificationOrchestrator.process({ leadId: req.params.id, organizationId: tenantId, text: String(req.body.text || ''), configuration });
+    const result = await qualificationOrchestrator.process({
+      leadId: req.params.id,
+      organizationId: tenantId,
+      message: req.body.message,
+      configuration,
+      policy: configuration.qualification,
+    });
     return res.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to process conversation';
-    return res.status(message === 'Tenant access denied' ? 403 : message.startsWith('Lead not found') ? 404 : 400).json({ error: message });
+    return res.status(message === 'Tenant access denied' ? 403 : 400).json({ error: message });
   }
 });
 
 app.post('/api/leads/:id/redecide', async (req, res) => {
   try {
     const tenantId = tenantIdFromRequest(req);
-    const result = await revenueEngine.redecide(req.params.id, tenantId);
-    return res.json(result);
+    return res.json(await revenueEngine.redecide(req.params.id, tenantId));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to redecide lead';
     return res.status(message === 'Tenant access denied' ? 403 : message.startsWith('Lead not found') ? 404 : 400).json({ error: message });
   }
 });
 
-const dist = path.join(__dirname, 'dist');
-app.use(express.static(dist));
-app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
-app.listen(port, '0.0.0.0', () => console.log(`Revenue Engine listening on ${port}`));
+app.use(express.static(path.join(__dirname, 'dist')));
+app.get('*', (_req, res) => res.sendFile(path.join(__dirname, 'dist', 'index.html')));
+
+app.listen(port, () => console.log(`Zeerocodes Revenue Engine listening on ${port}`));
