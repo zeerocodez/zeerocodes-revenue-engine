@@ -1,6 +1,6 @@
 import type { TenantRecord, TenantUser } from '../domain/tenant';
 import type { TenantMembershipRepository } from '../application/tenant-membership-service';
-import { PostgresDatabase, json, parseJson } from './postgres';
+import { PostgresDatabase } from './postgres';
 
 export class PostgresTenantMembershipRepository implements TenantMembershipRepository {
   constructor(private readonly db: PostgresDatabase) {}
