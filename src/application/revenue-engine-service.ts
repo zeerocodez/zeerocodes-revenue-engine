@@ -6,12 +6,17 @@ import type { LeadIntakeInput, LeadRecord } from '../domain/lead';
 import { scoreLead } from '../domain/scoring';
 import type { ClientQualificationPolicy } from '../domain/client-policy';
 import { evaluateClientPolicy } from '../domain/client-policy';
+import type { ClientConfiguration } from '../domain/client-configuration';
 import type { LeadEvent, LeadEventStore } from '../domain/lead-events';
 
 export interface LeadStore {
   get(id: string): Promise<LeadRecord | null>;
   save(lead: LeadRecord): Promise<void>;
   list(organizationId: string): Promise<LeadRecord[]>;
+}
+
+export interface ClientConfigurationProvider {
+  get(organizationId: string): Promise<ClientConfiguration>;
 }
 
 export interface LeadDecisionResponse {
@@ -51,7 +56,12 @@ export class RevenueEngineService {
     private readonly store: LeadStore,
     private readonly policy?: ClientQualificationPolicy,
     private readonly eventStore?: LeadEventStore,
+    private readonly configurationProvider?: ClientConfigurationProvider,
   ) {}
+
+  private async configurationFor(organizationId: string): Promise<ClientConfiguration | undefined> {
+    return this.configurationProvider?.get(organizationId);
+  }
 
   async intake(input: LeadIntakeInput): Promise<LeadDecisionResponse> {
     if (!input.organizationId?.trim()) throw new Error('organizationId is required');
@@ -59,9 +69,18 @@ export class RevenueEngineService {
 
     const now = new Date().toISOString();
     const profile = input.profile ?? {};
-    const qualification = qualifyLead(profile);
-    const score = scoreLead(profile);
-    const policyResult = this.policy ? evaluateClientPolicy(profile, this.policy) : {
+    const configuration = await this.configurationFor(input.organizationId);
+    const policy = configuration?.qualification ?? this.policy;
+    const scoringConfig = configuration?.scoring;
+    const qualification = qualifyLead(profile, scoringConfig ? {
+      threshold: scoringConfig.threshold,
+      maxUrgencyDays: policy?.maximumUrgencyDays ?? 30,
+      requireDecisionMaker: false,
+      requireBudget: false,
+      weights: scoringConfig.weights,
+    } : undefined);
+    const score = scoreLead(profile, scoringConfig);
+    const policyResult = policy ? evaluateClientPolicy(profile, policy, scoringConfig) : {
       ...qualification,
       qualified: qualification.qualified,
     };
@@ -95,7 +114,7 @@ export class RevenueEngineService {
       score: score.score,
       qualification: { ...qualification, qualified: policyResult.qualified, hardDisqualified: policyResult.hardDisqualified },
       decision,
-      metadata: input.metadata,
+      metadata: { ...input.metadata, configurationVersion: configuration?.version },
     };
 
     await this.store.save(lead);
@@ -108,11 +127,11 @@ export class RevenueEngineService {
       toState: lead.state,
       reason: decision.reason,
       source: input.source,
-      metadata: { score: score.score, qualified: policyResult.qualified, route: decision.route },
+      metadata: { score: score.score, qualified: policyResult.qualified, route: decision.route, configurationVersion: configuration?.version },
     });
 
     await this.eventStore?.append(toLeadEvent(lead, 'lead.created', 'lead captured', undefined, lead.state, { source: input.source }));
-    await this.eventStore?.append(toLeadEvent(lead, 'lead.scored', decision.reason, lead.state, lead.state, { score: score.score, band: score.band, qualified: policyResult.qualified }));
+    await this.eventStore?.append(toLeadEvent(lead, 'lead.scored', decision.reason, lead.state, lead.state, { score: score.score, band: score.band, qualified: policyResult.qualified, configurationVersion: configuration?.version }));
     await this.eventStore?.append(toLeadEvent(lead, 'lead.routed', decision.reason, lead.state, lead.state, { route: decision.route, action: decision.action }));
 
     return { lead, decision, auditEvent };
@@ -131,8 +150,11 @@ export class RevenueEngineService {
     if (organizationId && lead.organizationId !== organizationId) throw new Error('Tenant access denied');
 
     const previousState = lead.state;
-    const score = scoreLead(lead.profile);
-    const policyResult = this.policy ? evaluateClientPolicy(lead.profile, this.policy) : {
+    const configuration = await this.configurationFor(lead.organizationId);
+    const policy = configuration?.qualification ?? this.policy;
+    const scoringConfig = configuration?.scoring;
+    const score = scoreLead(lead.profile, scoringConfig);
+    const policyResult = policy ? evaluateClientPolicy(lead.profile, policy, scoringConfig) : {
       score: score.score,
       qualified: score.qualified,
       reasons: score.reasons,
@@ -155,6 +177,7 @@ export class RevenueEngineService {
     lead.qualification = { ...lead.qualification, score: score.score, qualified: policyResult.qualified, reasons: policyResult.reasons, hardDisqualified: policyResult.hardDisqualified };
     lead.decision = decision;
     lead.updatedAt = new Date().toISOString();
+    lead.metadata = { ...lead.metadata, configurationVersion: configuration?.version };
     await this.store.save(lead);
 
     const auditEvent = createAuditEvent({
@@ -166,10 +189,10 @@ export class RevenueEngineService {
       toState: nextState,
       reason: decision.reason,
       source: lead.source,
-      metadata: { score: score.score, qualified: policyResult.qualified, route: decision.route, statePreserved: nextState === previousState && desiredState !== previousState },
+      metadata: { score: score.score, qualified: policyResult.qualified, route: decision.route, statePreserved: nextState === previousState && desiredState !== previousState, configurationVersion: configuration?.version },
     });
 
-    await this.eventStore?.append(toLeadEvent(lead, 'lead.scored', 'decision recalculated', previousState, nextState, { score: score.score, band: score.band, qualified: policyResult.qualified }));
+    await this.eventStore?.append(toLeadEvent(lead, 'lead.scored', 'decision recalculated', previousState, nextState, { score: score.score, band: score.band, qualified: policyResult.qualified, configurationVersion: configuration?.version }));
     if (previousState !== nextState) await this.eventStore?.append(toLeadEvent(lead, 'lead.state_changed', decision.reason, previousState, nextState, { route: decision.route, action: decision.action }));
     await this.eventStore?.append(toLeadEvent(lead, decision.action === 'reject' ? 'lead.rejected' : 'lead.routed', decision.reason, nextState, nextState, { route: decision.route, action: decision.action, statePreserved: nextState === previousState && desiredState !== previousState }));
 
