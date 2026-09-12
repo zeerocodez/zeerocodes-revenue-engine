@@ -1,4 +1,5 @@
 import type { LeadRecord } from '../domain/lead';
+import type { QualificationProfile } from '../domain/qualification';
 import { evaluateClientPolicy, type ClientQualificationPolicy } from '../domain/client-policy';
 import { decideConversation, type ConversationDecision } from '../domain/conversation-decision-engine';
 import { canTransition, transitionLead, type LeadState } from '../domain/lead-state';
@@ -9,10 +10,10 @@ import type { LeadStore } from './revenue-engine-service';
 import type { LeadEventStore } from '../domain/lead-events';
 
 export interface QualificationOrchestratorInput { leadId: string; organizationId: string; text: string; policy?: ClientQualificationPolicy; configuration?: ClientConfiguration; }
-export interface QualificationOrchestratorResult { lead: LeadRecord; conversationDecision: ConversationDecision; progress: QualificationProgress; nextQuestion?: string; extractedFields: Partial<Record<QualificationField, string | number | boolean>>; stateChanged: boolean; }
+export interface QualificationOrchestratorResult { lead: LeadRecord; conversationDecision: ConversationDecision; progress: QualificationProgress; nextQuestion?: string; extractedFields: Partial<QualificationProfile>; stateChanged: boolean; }
 
-function extractAnswers(text: string): Partial<Record<QualificationField, string | number | boolean>> {
-  const value = text.trim(); const lower = value.toLowerCase(); const result: Partial<Record<QualificationField, string | number | boolean>> = {};
+function extractAnswers(text: string): Partial<QualificationProfile> {
+  const value = text.trim(); const lower = value.toLowerCase(); const result: Partial<QualificationProfile> = {};
   if (/\b(yes|yeah|yep|correct|exactly|that'?s right)\b/i.test(value)) { result.serviceFit = true; result.needConfirmed = true; }
   if (/\b(no|nope|not really|not interested)\b/i.test(value)) result.serviceFit = false;
   if (/\b(i am|i'm|im|yes,? i)\b.*\b(decision maker|owner|boss|director|manager)\b/i.test(value) || /\b(i|we) (own|run) the business\b/i.test(value)) result.decisionMaker = true;
