@@ -1,9 +1,10 @@
 import type { LeadRecord } from '../domain/lead';
-import { evaluateClientPolicy, DEFAULT_CLIENT_POLICY, type ClientQualificationPolicy } from '../domain/client-policy';
+import { evaluateClientPolicy, type ClientQualificationPolicy } from '../domain/client-policy';
 import { decideConversation, type ConversationDecision } from '../domain/conversation-decision-engine';
 import { canTransition, transitionLead, type LeadState } from '../domain/lead-state';
 import { scoreLead } from '../domain/scoring';
 import { getNextQualificationQuestion, type QualificationField, type QualificationProgress, getQualificationProgress } from '../domain/qualification-question-engine';
+import type { ClientConfiguration } from '../domain/client-configuration';
 import type { LeadStore } from './revenue-engine-service';
 import type { LeadEventStore } from '../domain/lead-events';
 
@@ -12,6 +13,7 @@ export interface QualificationOrchestratorInput {
   organizationId: string;
   text: string;
   policy?: ClientQualificationPolicy;
+  configuration?: ClientConfiguration;
 }
 
 export interface QualificationOrchestratorResult {
@@ -80,7 +82,9 @@ export class QualificationOrchestrator {
     if (!lead) throw new Error(`Lead not found: ${input.leadId}`);
     if (lead.organizationId !== input.organizationId) throw new Error('Tenant access denied');
 
-    const policy = input.policy ?? DEFAULT_CLIENT_POLICY;
+    const policy = input.configuration?.qualification ?? input.policy;
+    if (!policy) throw new Error('Client qualification configuration is required');
+
     const extractedFields = extractAnswers(input.text);
     lead.profile = { ...lead.profile, ...extractedFields };
 
@@ -117,12 +121,11 @@ export class QualificationOrchestrator {
       action: conversationDecision.action === 'handoff-closer' ? 'closer-handoff'
         : conversationDecision.action === 'escalate-sdr' || conversationDecision.action === 'escalate-complaint' ? 'sdr-follow-up'
         : conversationDecision.action === 'opt-out' ? 'reject'
-        : conversationDecision.action === 'ask-qualification' ? 'ai-follow-up'
         : 'ai-follow-up',
       route: conversationDecision.owner === 'closer' ? 'closer' : conversationDecision.owner === 'sdr' ? 'sdr' : 'ai-follow-up',
       reason: conversationDecision.reason,
     };
-    lead.metadata = { ...lead.metadata, qualificationAsked: asked, lastConversationDecision: conversationDecision };
+    lead.metadata = { ...lead.metadata, qualificationAsked: asked, lastConversationDecision: conversationDecision, configurationVersion: input.configuration?.version };
     lead.updatedAt = new Date().toISOString();
     await this.leads.save(lead);
 
@@ -136,7 +139,7 @@ export class QualificationOrchestrator {
       fromState: previousState,
       toState: lead.state,
       reason: conversationDecision.reason,
-      metadata: { extractedFields, score: score.score, qualified: policyResult.qualified, nextQuestion: nextQuestion?.id },
+      metadata: { extractedFields, score: score.score, qualified: policyResult.qualified, nextQuestion: nextQuestion?.id, configurationVersion: input.configuration?.version },
     });
 
     if (stateChanged) {
