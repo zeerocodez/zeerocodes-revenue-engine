@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ConversationService } from './src/application/conversation-service';
 import { RevenueEngineService } from './src/application/revenue-engine-service';
+import { decideConversation } from './src/domain/conversation-decision-engine';
+import { scoreLead } from './src/domain/scoring';
 import { MemoryConversationStore, MemoryMessageStore } from './src/integrations/memory-messaging';
 import { MemoryLeadStore } from './src/integrations/memory-lead-store';
 import { MemoryLeadEventStore } from './src/integrations/memory-lead-events';
@@ -72,6 +74,26 @@ app.post('/api/leads/:id/messages', async (req, res) => {
     return res.status(201).json(result);
   } catch (error) {
     return res.status(400).json({ error: error instanceof Error ? error.message : 'Unable to send message' });
+  }
+});
+
+app.post('/api/leads/:id/conversation-decision', async (req, res) => {
+  try {
+    const lead = await leadStore.get(req.params.id);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+    const text = String(req.body.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Conversation text is required' });
+    const decision = decideConversation({
+      text,
+      leadScore: scoreLead(lead.profile),
+      consent: lead.consent,
+      requestedHuman: Boolean(req.body.requestedHuman),
+      appointmentBooked: lead.state === 'booked',
+      qualificationComplete: Boolean(lead.profile.needConfirmed && lead.profile.serviceFit),
+    });
+    return res.json({ decision });
+  } catch (error) {
+    return res.status(400).json({ error: error instanceof Error ? error.message : 'Unable to decide conversation action' });
   }
 });
 
