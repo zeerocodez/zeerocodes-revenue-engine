@@ -9,9 +9,11 @@ import { MemoryClientConfigurationStore } from './src/integrations/memory-client
 import { MemoryConversationStore, MemoryMessageStore } from './src/integrations/memory-messaging';
 import { MemoryLeadStore } from './src/integrations/memory-lead-store';
 import { MemoryLeadEventStore } from './src/integrations/memory-lead-events';
+import { MemoryTenantMembershipRepository } from './src/integrations/memory-tenant-membership';
+import { TenantMembershipService } from './src/application/tenant-membership-service';
 import type { ClientConfiguration } from './src/domain/client-configuration';
+import { MembershipIdentityResolver, requireRole, type AuthenticatedRequestContext } from './src/application/request-context';
 import type { TenantRole } from './src/domain/tenant';
-import { requireRole, StaticIdentityResolver, type AuthenticatedRequestContext } from './src/application/request-context';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,7 +26,20 @@ const clientConfigurationService = new ClientConfigurationService(clientConfigur
 const revenueEngine = new RevenueEngineService(leadStore, undefined, leadEventStore, clientConfigurationService);
 const conversationService = new ConversationService(leadStore, new MemoryConversationStore(), new MemoryMessageStore());
 const qualificationOrchestrator = new QualificationOrchestrator(leadStore, leadEventStore);
-const identityResolver = new StaticIdentityResolver();
+const membershipRepository = new MemoryTenantMembershipRepository();
+const membershipService = new TenantMembershipService(membershipRepository);
+const identityResolver = new MembershipIdentityResolver(membershipService);
+
+// Development bootstrap only. Production must replace this repository with persistent membership storage.
+if (process.env.NODE_ENV !== 'production') {
+  const tenantId = process.env.DEV_TENANT_ID || 'demo-tenant';
+  const userId = process.env.DEV_USER_ID || 'demo-user';
+  const role = (process.env.DEV_USER_ROLE || 'owner') as TenantRole;
+  const validRoles: TenantRole[] = ['viewer', 'agent', 'manager', 'admin', 'owner'];
+  if (!validRoles.includes(role)) throw new Error('Invalid DEV_USER_ROLE');
+  membershipRepository.seedTenant({ id: tenantId, name: 'Demo Tenant', slug: 'demo-tenant', status: 'active', createdAt: new Date().toISOString() });
+  membershipRepository.seedMembership({ id: userId, tenantId, email: process.env.DEV_USER_EMAIL || 'demo@example.com', role, active: true, createdAt: new Date().toISOString() });
+}
 
 app.use(express.json());
 type RequestWithContext = express.Request & { context?: AuthenticatedRequestContext };
@@ -32,11 +47,8 @@ type RequestWithContext = express.Request & { context?: AuthenticatedRequestCont
 function authMiddleware(req: RequestWithContext, res: express.Response, next: express.NextFunction) {
   const userId = req.header('x-user-id');
   const tenantId = req.header('x-tenant-id');
-  const role = req.header('x-tenant-role') as TenantRole | undefined;
-  const validRoles: TenantRole[] = ['viewer', 'agent', 'manager', 'admin', 'owner'];
-  if (!userId || !tenantId || !role) return res.status(401).json({ error: 'Authenticated user and tenant context are required' });
-  if (!validRoles.includes(role)) return res.status(401).json({ error: 'Invalid tenant role' });
-  void identityResolver.resolve({ userId, tenantId, role }).then((context) => {
+  if (!userId || !tenantId) return res.status(401).json({ error: 'Authenticated user and tenant context are required' });
+  void identityResolver.resolve({ userId, tenantId }).then((context) => {
     req.context = context;
     next();
   }).catch((error) => res.status(401).json({ error: error instanceof Error ? error.message : 'Authentication failed' }));
@@ -50,10 +62,11 @@ function contextOf(req: RequestWithContext): AuthenticatedRequestContext {
 function tenantError(error: unknown) {
   const message = error instanceof Error ? error.message : 'Request failed';
   if (message === 'Tenant access denied' || message === 'Insufficient tenant role') return 403;
+  if (message === 'Tenant membership not found' || message === 'Tenant membership is inactive' || message === 'Tenant is suspended' || message === 'Tenant not found') return 403;
   return 400;
 }
 
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'zeerocodes-revenue-engine', mode: 'memory', tenancy: 'authenticated-context' }));
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'zeerocodes-revenue-engine', mode: 'memory', tenancy: 'membership-backed' }));
 app.use('/api', authMiddleware);
 
 app.get('/api/configuration', async (req: RequestWithContext, res) => {
