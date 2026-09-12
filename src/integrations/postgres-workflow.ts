@@ -11,6 +11,13 @@ export class PostgresRevenueWorkflowRepository {
       [record.id,record.organizationId,record.leadId,record.scheduledAt,record.status,record.ownerUserId ?? null,record.source ?? null,record.idempotencyKey ?? null,json(record.metadata),record.createdAt,record.updatedAt]);
   }
 
+  async findAppointmentByIdempotency(organizationId: string, idempotencyKey: string): Promise<AppointmentRecord | null> {
+    const r = await this.db.query<any>('select * from appointments where organization_id=$1 and idempotency_key=$2 limit 1',[organizationId,idempotencyKey]);
+    if (!r.rows[0]) return null;
+    const row=r.rows[0];
+    return {id:row.id,organizationId:row.organization_id,leadId:row.lead_id,scheduledAt:new Date(row.scheduled_at).toISOString(),status:row.status,ownerUserId:row.owner_user_id ?? undefined,source:row.source ?? undefined,idempotencyKey:row.idempotency_key ?? undefined,metadata:parseJson(row.metadata,{}),createdAt:new Date(row.created_at).toISOString(),updatedAt:new Date(row.updated_at).toISOString()};
+  }
+
   async listAppointments(organizationId: string, leadId?: string): Promise<AppointmentRecord[]> {
     const r = leadId
       ? await this.db.query<any>('select * from appointments where organization_id=$1 and lead_id=$2 order by scheduled_at desc',[organizationId,leadId])
@@ -25,6 +32,13 @@ export class PostgresRevenueWorkflowRepository {
       [record.id,record.organizationId,record.leadId,record.outcome,record.revenueAmount ?? null,record.currency,record.reason ?? null,record.ownerUserId ?? null,record.idempotencyKey ?? null,record.occurredAt,json(record.metadata)]);
   }
 
+  async findOutcomeByIdempotency(organizationId: string, idempotencyKey: string): Promise<LeadOutcomeRecord | null> {
+    const r=await this.db.query<any>('select * from lead_outcomes where organization_id=$1 and idempotency_key=$2 limit 1',[organizationId,idempotencyKey]);
+    if(!r.rows[0]) return null;
+    const row=r.rows[0];
+    return {id:row.id,organizationId:row.organization_id,leadId:row.lead_id,outcome:row.outcome,revenueAmount:row.revenue_amount===null?null:Number(row.revenue_amount),currency:row.currency,reason:row.reason ?? undefined,ownerUserId:row.owner_user_id ?? undefined,idempotencyKey:row.idempotency_key ?? undefined,occurredAt:new Date(row.occurred_at).toISOString(),metadata:parseJson(row.metadata,{})};
+  }
+
   async saveAttribution(record: RevenueAttributionRecord): Promise<void> {
     await this.db.query(`insert into revenue_attributions (id,organization_id,lead_id,outcome_id,source,campaign,medium,attribution_model,attributed_amount,currency,created_at)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
@@ -32,9 +46,9 @@ export class PostgresRevenueWorkflowRepository {
   }
 
   async recordUsage(entry: UsageLedgerEntry): Promise<boolean> {
-    const r = await this.db.query(`insert into usage_ledger (id,organization_id,lead_id,event_type,quantity,unit_price,currency,idempotency_key,metadata)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) on conflict (organization_id,idempotency_key) do nothing`,
-      [entry.id,entry.organizationId,entry.leadId ?? null,entry.eventType,entry.quantity,entry.unitPrice,entry.currency,json(entry.metadata)]);
+    const r = await this.db.query(`insert into usage_ledger (id,organization_id,lead_id,event_type,quantity,unit_price,currency,idempotency_key,metadata,created_at)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10) on conflict (organization_id,idempotency_key) do nothing`,
+      [entry.id,entry.organizationId,entry.leadId ?? null,entry.eventType,entry.quantity,entry.unitPrice,entry.currency,entry.idempotencyKey,json(entry.metadata),entry.createdAt]);
     return r.rowCount === 1;
   }
 
