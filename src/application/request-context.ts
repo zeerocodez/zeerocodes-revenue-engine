@@ -1,4 +1,5 @@
 import type { TenantRole, TenantContext } from '../domain/tenant';
+import { TenantMembershipService } from './tenant-membership-service';
 
 export interface AuthenticatedRequestContext extends TenantContext {
   userId: string;
@@ -8,17 +9,30 @@ export interface AuthenticatedRequestContext extends TenantContext {
 export interface RequestIdentity {
   userId: string;
   tenantId: string;
-  role: TenantRole;
+  /** Optional development-only assertion. Production role comes from membership. */
+  role?: TenantRole;
 }
 
 export interface IdentityResolver {
   resolve(identity: RequestIdentity): Promise<AuthenticatedRequestContext>;
 }
 
+/** Resolves tenant and role from the membership boundary; request headers cannot grant privileges. */
+export class MembershipIdentityResolver implements IdentityResolver {
+  constructor(private readonly memberships: TenantMembershipService) {}
+
+  async resolve(identity: RequestIdentity): Promise<AuthenticatedRequestContext> {
+    const membership = await this.memberships.authenticate(identity.userId, identity.tenantId);
+    return { userId: membership.id, tenantId: membership.tenantId, role: membership.role };
+  }
+}
+
+/** Temporary adapter retained for isolated tests; do not use for production authentication. */
 export class StaticIdentityResolver implements IdentityResolver {
   async resolve(identity: RequestIdentity): Promise<AuthenticatedRequestContext> {
     if (!identity.userId.trim()) throw new Error('Authenticated user is required');
     if (!identity.tenantId.trim()) throw new Error('Tenant context is required');
+    if (!identity.role) throw new Error('Tenant role is required');
     return { userId: identity.userId, tenantId: identity.tenantId, role: identity.role };
   }
 }
