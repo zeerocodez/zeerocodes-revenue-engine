@@ -113,17 +113,6 @@ app.get('/api/leads/:id/conversation', async (req, res) => {
   }
 });
 
-app.get('/api/leads/:id/messages', async (req, res) => {
-  try {
-    const tenantId = tenantIdFromRequest(req);
-    await revenueEngine.getLeadForOrganization(req.params.id, tenantId);
-    return res.json({ messages: await conversationService.listMessages(req.params.id, tenantId) });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Messages unavailable';
-    return res.status(message === 'Tenant access denied' ? 403 : 400).json({ error: message });
-  }
-});
-
 app.post('/api/leads/:id/messages', async (req, res) => {
   try {
     const tenantId = tenantIdFromRequest(req);
