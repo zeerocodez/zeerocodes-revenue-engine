@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { ArrowRight, Bot, Check, Clock3, MessageSquare, Phone, Send, UserRound } from 'lucide-react';
 import type { LeadRecord } from '../../domain/lead';
+import type { LeadEvent } from '../../domain/lead-events';
 import type { LeadState } from '../../domain/lead-state';
 import { scoreLead } from '../../domain/scoring';
 import { routeLead } from '../../domain/routing';
@@ -10,6 +12,7 @@ type Props = { organizationId?: string };
 export default function LeadWorkspace({ organizationId = 'default' }: Props) {
   const [leads, setLeads] = useState<LeadRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
+  const [events, setEvents] = useState<LeadEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function loadLeads() {
@@ -21,7 +24,22 @@ export default function LeadWorkspace({ organizationId = 'default' }: Props) {
     setLoading(false);
   }
 
+  async function loadEvents(leadId?: string) {
+    if (!leadId) {
+      setEvents([]);
+      return;
+    }
+    const response = await fetch(`/api/leads/${encodeURIComponent(leadId)}/events`);
+    if (!response.ok) {
+      setEvents([]);
+      return;
+    }
+    const data = await response.json();
+    setEvents(data.events ?? []);
+  }
+
   useEffect(() => { void loadLeads(); }, [organizationId]);
+  useEffect(() => { void loadEvents(selectedId); }, [selectedId]);
 
   const selected = useMemo(() => leads.find((lead) => lead.id === selectedId), [leads, selectedId]);
   const score = selected ? scoreLead(selected.profile) : null;
@@ -31,6 +49,7 @@ export default function LeadWorkspace({ organizationId = 'default' }: Props) {
     if (!selected) return;
     await fetch(`/api/leads/${selected.id}/redecide`, { method: 'POST' });
     await loadLeads();
+    await loadEvents(selected.id);
   }
 
   if (loading) return <div className="card p-8 text-sm muted">Loading lead workspace…</div>;
@@ -38,7 +57,7 @@ export default function LeadWorkspace({ organizationId = 'default' }: Props) {
   return (
     <div className="grid min-h-[650px] gap-4 xl:grid-cols-[300px_1fr_330px]">
       <LeadList leads={leads} selectedId={selectedId} onSelect={setSelectedId} />
-      {selected ? <ConversationPane lead={selected} route={route ?? 'nurture'} onRefresh={loadLeads} /> : <EmptyWorkspace />}
+      {selected ? <ConversationPane lead={selected} route={route ?? 'nurture'} events={events} onRefresh={async () => { await loadLeads(); await loadEvents(selected.id); }} /> : <EmptyWorkspace />}
       {selected && score ? <DecisionPanel lead={selected} score={score} route={route ?? 'nurture'} onRedecide={redecide} /> : null}
     </div>
   );
@@ -56,16 +75,29 @@ function LeadList({ leads, selectedId, onSelect }: { leads: LeadRecord[]; select
   </section>;
 }
 
-function ConversationPane({ lead, route, onRefresh }: { lead: LeadRecord; route: string; onRefresh: () => Promise<void> }) {
+function ConversationPane({ lead, route, events }: { lead: LeadRecord; route: string; events: LeadEvent[]; onRefresh: () => Promise<void> }) {
   return <section className="card flex min-h-[650px] flex-col overflow-hidden">
     <div className="flex items-center justify-between border-b border-slate-800 p-4"><div><div className="font-semibold">{lead.name}</div><div className="mt-1 text-xs muted">{lead.phone ?? lead.email ?? 'No contact channel'} · {lead.source ?? 'Direct'}</div></div><div className="flex gap-2"><button className="rounded-lg border border-slate-700 p-2 text-slate-400" title="Call"><Phone size={16}/></button><button className="rounded-lg border border-slate-700 p-2 text-slate-400" title="Message"><MessageSquare size={16}/></button></div></div>
-    <div className="flex-1 space-y-4 bg-[#0a0f1b] p-5">
-      <TimelineItem icon={<Bot size={14}/>} title="Revenue Engine" text={`Lead routed to ${route}. Decision: ${lead.decision?.reason ?? 'awaiting decision'}.`} time={lead.updatedAt}/>
-      <TimelineItem icon={<UserRound size={14}/>} title="Lead captured" text={`${lead.name} entered from ${lead.source ?? 'direct'}.`} time={lead.createdAt}/>
-      {lead.qualification?.reasons?.map((reason) => <TimelineItem key={reason} icon={<Check size={14}/>} title="Qualification signal" text={reason} time={lead.updatedAt}/>) }
+    <div className="flex-1 space-y-4 overflow-y-auto bg-[#0a0f1b] p-5">
+      {events.length ? events.map((event) => <TimelineItem key={event.id} icon={eventIcon(event.type)} title={eventTitle(event.type)} text={event.reason ?? event.type} time={event.timestamp}/>) : <>
+        <TimelineItem icon={<Bot size={14}/>} title="Revenue Engine" text={`Lead routed to ${route}. Decision: ${lead.decision?.reason ?? 'awaiting decision'}.`} time={lead.updatedAt}/>
+        <TimelineItem icon={<UserRound size={14}/>} title="Lead captured" text={`${lead.name} entered from ${lead.source ?? 'direct'}.`} time={lead.createdAt}/>
+      </>}
     </div>
     <div className="border-t border-slate-800 p-4"><div className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/70 p-2"><input className="min-w-0 flex-1 bg-transparent px-2 text-sm outline-none" placeholder="Reply or add an internal note…"/><button className="rounded-lg bg-indigo-500 p-2 text-white"><Send size={15}/></button></div><div className="mt-2 flex items-center gap-2 text-[11px] muted"><Clock3 size={12}/> Next automated action follows the current decision policy.</div></div>
   </section>;
+}
+
+function eventIcon(type: LeadEvent['type']) {
+  if (type === 'lead.created') return <UserRound size={14}/>;
+  if (type === 'lead.scored') return <Check size={14}/>;
+  if (type === 'lead.routed') return <ArrowRight size={14}/>;
+  if (type === 'lead.rejected') return <Bot size={14}/>;
+  return <Clock3 size={14}/>;
+}
+
+function eventTitle(type: LeadEvent['type']) {
+  return type.replace('lead.', '').replaceAll('_', ' ');
 }
 
 function DecisionPanel({ lead, score, route, onRedecide }: { lead: LeadRecord; score: ReturnType<typeof scoreLead>; route: string; onRedecide: () => Promise<void> }) {
@@ -83,6 +115,6 @@ function DecisionPanel({ lead, score, route, onRedecide }: { lead: LeadRecord; s
   </section>;
 }
 
-function TimelineItem({ icon, title, text, time }: { icon: React.ReactNode; title: string; text: string; time: string }) { return <div className="flex gap-3"><div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-800 text-indigo-300">{icon}</div><div><div className="text-sm font-medium">{title}</div><div className="mt-1 text-sm text-slate-400">{text}</div><div className="mt-1 text-[10px] text-slate-600">{new Date(time).toLocaleString()}</div></div></div> }
+function TimelineItem({ icon, title, text, time }: { icon: ReactNode; title: string; text: string; time: string }) { return <div className="flex gap-3"><div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-800 text-indigo-300">{icon}</div><div><div className="text-sm font-medium capitalize">{title}</div><div className="mt-1 text-sm text-slate-400">{text}</div><div className="mt-1 text-[10px] text-slate-600">{new Date(time).toLocaleString()}</div></div></div> }
 function StateBadge({ state }: { state: LeadState }) { const tone = state === 'qualified' || state === 'won' ? 'text-emerald-300 bg-emerald-500/10' : state === 'booked' ? 'text-indigo-300 bg-indigo-500/10' : state === 'lost' || state === 'invalid' ? 'text-rose-300 bg-rose-500/10' : 'text-amber-300 bg-amber-500/10'; return <span className={`rounded-full px-2 py-1 text-[10px] ${tone}`}>{state}</span> }
 function EmptyWorkspace() { return <section className="card grid place-items-center xl:col-span-2"><div className="text-center"><div className="text-lg font-semibold">Select a lead</div><div className="mt-1 text-sm muted">The conversation and decision workspace will appear here.</div></div></section> }
