@@ -9,25 +9,30 @@
 
 `zeerocodez/zeerocodes-revenue-engine`
 
-## Pass 1 completed
+## Pass 2 completed
 
-- Initialized the previously empty target repository.
-- Added unified package manifest based on the stronger Zeerocodes runtime and Lead Zero dependencies.
-- Preserved both source repositories unchanged.
-- Audited the Lead Zero Vite/React application and its dashboard components.
-- Audited the Zeerocodes React/Vite application, Express server, Firebase rules/configuration, CRM pages/components, and security assets.
+- Imported source snapshots into `legacy/lead-zero` and `legacy/zeerocodes` without modifying either source repository.
+- Established one React/Vite + Express runtime in the target.
+- Added a unified Revenue Engine dashboard shell.
+- Connected the UI to qualification, scoring, routing, lead-state and pricing domain logic.
+- Added configurable qualification policy and hard-disqualification routing.
+- Added Lead Zero domain types and a Lead Zero → unified lead-state adapter.
+- Added integration contracts for CRM/lead storage, messaging, voice, payments and ad sources.
+- Added auditable state/event primitives.
+- Added Vitest coverage for qualification, routing, state transitions and pricing.
 
-## Important architectural decision
+## Architectural decision
 
-Zeerocodes is the application/runtime foundation. Lead Zero becomes a product capability inside the Revenue Engine rather than a second standalone application.
+Zeerocodes remains the runtime foundation. Lead Zero is a capability inside the Revenue Engine, not a second application.
 
-The consolidation should therefore avoid two competing `App.tsx` entry points, two package manifests, and two independent server runtimes.
+The imported source snapshots are migration safety copies. They are not the production entry points and should not be edited directly.
 
-## Next migration pass
+## Pass 3 — next
 
-1. Import Zeerocodes runtime/application files into the target.
-2. Import Lead Zero UI/features under `src/features/lead-zero/`.
-3. Add a unified Lead Zero route/navigation entry to the Zeerocodes shell.
-4. Extract qualification, lead-state, scoring, routing, pricing, and pilot logic into domain modules.
-5. Keep Firebase/server integrations behind adapters.
-6. Run TypeScript/build/security tests before removing duplication.
+1. Extract the highest-value Lead Zero screens into `src/features/lead-zero/`.
+2. Extract the CRM/pipeline screens from Zeerocodes into shared feature modules.
+3. Implement Firebase-backed repositories behind `LeadRepository`.
+4. Implement WhatsApp/email/voice adapters behind gateway contracts.
+5. Replace demo dashboard data with tenant-scoped data.
+6. Add client-specific qualification profiles, pricing rules and pilot controls.
+7. Run full TypeScript/build/security validation before retiring duplicate legacy code.
