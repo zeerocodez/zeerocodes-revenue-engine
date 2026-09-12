@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+
+  --color-navy-950: #0D1623;
+  --color-navy-900: #1A2B44;
+  --color-navy-800: #243B5A;
+  --color-navy-700: #2F4B71;
+  
+  --color-coral-500: #FF6B4A;
+  --color-coral-600: #E85A3C;
+  
+  --color-warm-gray-50: #0D1623;
+  --color-warm-gray-100: #1A2B44;
+  --color-warm-gray-200: #243B5A;
+  --color-warm-gray-300: #2F4B71;
+  --color-warm-gray-400: #64748B;
+  --color-warm-gray-600: #94A3B8;
+  --color-warm-gray-900: #FDFBF7;
+}
+
+@layer base {
+  body {
+    @apply bg-navy-950 text-warm-gray-900 font-sans antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tighter uppercase;
+  }
+
+  /* Smooth scrolling for anchor links */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Prevent overscroll on mobile but allow natural scrolling */
+  html, body {
+    min-height: 100%;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 107, 74, 0.5);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 107, 74, 0.8);
+    border: 1px solid transparent;
+    background-clip: content-box;
+  }
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 107, 74, 0.2) rgba(255, 255, 255, 0.02);
+  }
+}

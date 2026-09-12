@@ -1,0 +1,169 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+             request.auth.token.email != null && 
+             request.auth.token.email.lower() == 'zeerocodes@gmail.com';
+    }
+
+    function isTeamMember() {
+      return isSignedIn() && (
+        isAdmin() || 
+        exists(/databases/$(database)/documents/members/$(request.auth.token.email.lower()))
+      );
+    }
+
+    function isOwner(data) {
+      return data.ownerId == request.auth.uid || (data.userId == request.auth.uid);
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validations ---
+
+    function isValidLead(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'status', 'createdAt', 'updatedAt']) &&
+             data.keys().size() <= 15 &&
+             data.ownerId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 128 &&
+             data.status in ['New', 'Contacted', 'Qualified', 'Converted', 'Lost'] &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasAll(['authorId', 'text', 'createdAt']) &&
+             data.keys().size() == 3 &&
+             data.authorId == request.auth.uid &&
+             data.text is string && data.text.size() > 0 && data.text.size() <= 1000 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidFollowUp(data) {
+      return data.keys().hasAll(['ownerId', 'leadId', 'type', 'status', 'scheduledAt']) &&
+             data.keys().size() <= 10 &&
+             data.ownerId == request.auth.uid &&
+             data.leadId is string &&
+             data.type in ['Call', 'WhatsApp', 'Email', 'Meeting', 'SMS'] &&
+             data.status in ['Upcoming', 'Overdue', 'Completed', 'Missed'] &&
+             data.scheduledAt is timestamp;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().size() <= 20 &&
+             (!data.keys().hasAll(['updatedAt']) || data.updatedAt is timestamp);
+    }
+
+    function isValidTicket(data) {
+      return data.keys().hasAll(['userId', 'subject', 'status', 'type', 'priority', 'createdAt']) &&
+             data.keys().size() <= 9 &&
+             data.userId == request.auth.uid &&
+             data.subject is string && data.subject.size() > 0 && data.subject.size() <= 200 &&
+             data.status in ['Open', 'Pending', 'Resolved', 'Closed'] &&
+             data.type in ['Dispute', 'Billing', 'Technical', 'Feedback'] &&
+             data.priority in ['Low', 'Medium', 'High', 'Critical'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['userId', 'amount', 'type', 'status', 'createdAt']) &&
+             data.keys().size() <= 7 &&
+             data.userId == request.auth.uid &&
+             data.amount is number &&
+             data.type in ['Charge', 'Credit', 'Refund'] &&
+             data.status in ['Pending', 'Completed', 'Failed'] &&
+             data.createdAt is timestamp;
+    }
+
+    function getMemberOrgId() {
+      return exists(/databases/$(database)/documents/members/$(request.auth.token.email.lower())) 
+        ? get(/databases/$(database)/documents/members/$(request.auth.token.email.lower())).data.organizationId 
+        : "unassigned";
+    }
+
+    function isOrgMember(orgId) {
+      return isSignedIn() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/members/$(request.auth.token.email.lower())) && 
+         get(/databases/$(database)/documents/members/$(request.auth.token.email.lower())).data.organizationId == orgId)
+      );
+    }
+
+    // --- Collections ---
+
+    match /organizations/{orgId} {
+      allow get: if isOrgMember(orgId);
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isOrgMember(orgId);
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+
+    match /leads/{leadId} {
+      allow get: if isOrgMember(resource.data.organizationId);
+      allow list: if isSignedIn() && (isAdmin() || resource.data.organizationId == getMemberOrgId());
+      
+      allow create: if isOrgMember(request.resource.data.organizationId);
+      allow update: if isOrgMember(resource.data.organizationId);
+      allow delete: if isOrgMember(resource.data.organizationId);
+
+      match /comments/{commentId} {
+        allow list, create: if isOrgMember(get(/databases/$(database)/documents/leads/$(leadId)).data.organizationId);
+        allow update, delete: if isOrgMember(get(/databases/$(database)/documents/leads/$(leadId)).data.organizationId);
+      }
+    }
+
+    match /followUps/{followUpId} {
+      allow get: if isOrgMember(resource.data.organizationId);
+      allow list: if isSignedIn() && (isAdmin() || resource.data.organizationId == getMemberOrgId());
+      allow create: if isOrgMember(request.resource.data.organizationId);
+      allow update: if isOrgMember(resource.data.organizationId);
+      allow delete: if isOrgMember(resource.data.organizationId);
+    }
+
+    match /tickets/{ticketId} {
+      allow get, list, create, update: if isSignedIn() && (isAdmin() || resource.data.organizationId == getMemberOrgId() || resource.data.userId == request.auth.uid); 
+      allow delete: if isAdmin();
+    }
+
+    match /transactions/{transactionId} {
+      allow get, list, create: if isSignedIn() && (isAdmin() || resource.data.organizationId == getMemberOrgId() || resource.data.userId == request.auth.uid); 
+      allow update, delete: if false;
+    }
+
+    match /members/{emailLower} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn(); // Allow creating org or adding team
+      allow update, delete: if isAdmin() || (isSignedIn() && getMemberOrgId() == resource.data.organizationId);
+    }
+  }
+}

@@ -1,0 +1,123 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(data) {
+      return data.ownerId == request.auth.uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Entity Validations ---
+
+    function isValidLead(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'status', 'createdAt', 'updatedAt']) &&
+             data.keys().size() <= 15 &&
+             data.ownerId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 128 &&
+             data.status in ['New', 'Contacted', 'Qualified', 'Converted', 'Lost'] &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasAll(['authorId', 'text', 'createdAt']) &&
+             data.keys().size() == 3 &&
+             data.authorId == request.auth.uid &&
+             data.text is string && data.text.size() > 0 && data.text.size() <= 1000 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidFollowUp(data) {
+      return data.keys().hasAll(['ownerId', 'leadId', 'type', 'status', 'scheduledAt']) &&
+             data.keys().size() <= 10 &&
+             data.ownerId == request.auth.uid &&
+             data.leadId is string &&
+             data.type in ['Call', 'WhatsApp', 'Email', 'Meeting', 'SMS'] &&
+             data.status in ['Upcoming', 'Overdue', 'Completed', 'Missed'] &&
+             data.scheduledAt is timestamp;
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['qualificationRules', 'followUpIntervals']) &&
+             data.keys().size() == 2 &&
+             data.qualificationRules is string &&
+             data.followUpIntervals is list;
+    }
+
+    // --- Collections ---
+
+    match /leads/{leadId} {
+      allow get: if isSignedIn() && isOwner(existing());
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      
+      allow create: if isSignedIn() && isValidId(leadId) && isValidLead(incoming()) && 
+                        incoming().createdAt == request.time && 
+                        incoming().updatedAt == request.time;
+      
+      allow update: if isSignedIn() && isOwner(existing()) && isValidLead(incoming()) &&
+                        incoming().ownerId == existing().ownerId &&
+                        incoming().createdAt == existing().createdAt &&
+                        incoming().updatedAt == request.time &&
+                        (
+                          // Regular Update
+                          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'phone', 'company', 'industry', 'source', 'status', 'budgetRange', 'notes', 'qualificationScore', 'aiSummary', 'updatedAt'])
+                        );
+      
+      allow delete: if isSignedIn() && isOwner(existing());
+
+      match /comments/{commentId} {
+        allow list: if isSignedIn() && get(/databases/$(database)/documents/leads/$(leadId)).data.ownerId == request.auth.uid;
+        allow create: if isSignedIn() && isValidId(commentId) && isValidComment(incoming()) &&
+                          incoming().createdAt == request.time &&
+                          get(/databases/$(database)/documents/leads/$(leadId)).data.ownerId == request.auth.uid;
+        // Comments are immutable in this flow
+        allow update, delete: if false;
+      }
+    }
+
+    match /followUps/{followUpId} {
+      allow get: if isSignedIn() && isOwner(existing());
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      
+      allow create: if isSignedIn() && isValidId(followUpId) && isValidFollowUp(incoming()) &&
+                        exists(/databases/$(database)/documents/leads/$(incoming().leadId)) &&
+                        get(/databases/$(database)/documents/leads/$(incoming().leadId)).data.ownerId == request.auth.uid;
+      
+      allow update: if isSignedIn() && isOwner(existing()) && isValidFollowUp(incoming()) &&
+                        incoming().ownerId == existing().ownerId &&
+                        incoming().leadId == existing().leadId &&
+                        (
+                          // Action: Update Status/Notes
+                          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'outcome', 'scheduledAt', 'type'])
+                        );
+      
+      allow delete: if isSignedIn() && isOwner(existing());
+    }
+
+    match /settings/{userId} {
+      allow get: if isSignedIn() && userId == request.auth.uid;
+      allow write: if isSignedIn() && userId == request.auth.uid && isValidSettings(incoming());
+    }
+  }
+}

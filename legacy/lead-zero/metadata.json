@@ -1,0 +1,11 @@
+{
+  "name": "LeadZero v2",
+  "description": "WhatsApp-first sales inbox designed for African SMEs to centralize chats, automate followups, collaborate with teams, and track revenue seamlessly.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

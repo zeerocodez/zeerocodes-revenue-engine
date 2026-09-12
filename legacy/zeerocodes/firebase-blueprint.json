@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "Lead": {
+      "title": "Lead",
+      "description": "A potential customer lead information.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "description": "UID of the user who owns this lead." },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "company": { "type": "string" },
+        "industry": { "type": "string" },
+        "source": { "type": "string" },
+        "status": { "type": "string" },
+        "budgetRange": { "type": "string" },
+        "notes": { "type": "string" },
+        "qualificationScore": { "type": "number" },
+        "aiSummary": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "name", "status"]
+    },
+    "LeadComment": {
+      "title": "Lead Comment",
+      "description": "A comment left on a lead.",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "text", "createdAt"]
+    },
+    "FollowUp": {
+      "title": "Follow Up",
+      "description": "A scheduled follow up task for a lead.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "leadId": { "type": "string" },
+        "type": { "type": "string" },
+        "status": { "type": "string" },
+        "scheduledAt": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" },
+        "outcome": { "type": "string" }
+      },
+      "required": ["ownerId", "leadId", "type", "status", "scheduledAt"]
+    },
+    "AppSettings": {
+      "title": "App Settings",
+      "description": "User specific application settings.",
+      "type": "object",
+      "properties": {
+        "qualificationRules": { "type": "string" },
+        "followUpIntervals": { 
+          "type": "array",
+          "items": { "type": "object" }
+        }
+      }
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "A support or dispute ticket.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "leadId": { "type": "string" },
+        "subject": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["Open", "Pending", "Resolved", "Closed"] },
+        "type": { "type": "string", "enum": ["Dispute", "Billing", "Technical", "Feedback"] },
+        "priority": { "type": "string", "enum": ["Low", "Medium", "High", "Critical"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "subject", "status", "type", "priority", "createdAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A billing transaction record.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "leadId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["Charge", "Credit", "Refund"] },
+        "status": { "type": "string", "enum": ["Pending", "Completed", "Failed"] },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "type", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Collection of leads."
+    },
+    "/leads/{leadId}/comments/{commentId}": {
+      "schema": "LeadComment",
+      "description": "Subcollection of comments for a lead."
+    },
+    "/followUps/{followUpId}": {
+      "schema": "FollowUp",
+      "description": "Collection of follow up tasks."
+    },
+    "/settings/{userId}": {
+      "schema": "AppSettings",
+      "description": "User settings stored by userId."
+    },
+    "/tickets/{ticketId}": {
+      "schema": "Ticket",
+      "description": "Global ticketing collection."
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Billing transactions."
+    }
+  }
+}

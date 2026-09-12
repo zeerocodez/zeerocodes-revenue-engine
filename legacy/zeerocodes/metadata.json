@@ -1,0 +1,8 @@
+{
+  "name": "Zeerocodes CRM",
+  "description": "Autonomous Sales, Qualification, and CRM Platform powered by Zeerocodes Automation. Turn your leads into paying customers automatically.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
