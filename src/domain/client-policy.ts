@@ -1,5 +1,6 @@
 import type { QualificationProfile, QualificationResult } from './qualification';
 import { qualifyLead } from './qualification';
+import type { ClientScoringConfig } from './client-configuration';
 
 export interface ClientQualificationPolicy {
   qualificationThreshold: number;
@@ -25,6 +26,7 @@ export interface PolicyEvaluation extends QualificationResult {
 export function evaluateClientPolicy(
   profile: QualificationProfile,
   policy: ClientQualificationPolicy = DEFAULT_CLIENT_POLICY,
+  scoringConfig?: ClientScoringConfig,
 ): PolicyEvaluation {
   if (policy.requireServiceFit && profile.serviceFit === false) {
     return { score: 0, qualified: false, reasons: [], hardDisqualified: true, disqualificationReason: 'service fit failed' };
@@ -46,7 +48,14 @@ export function evaluateClientPolicy(
     return { score: 0, qualified: false, reasons: [], hardDisqualified: true, disqualificationReason: 'urgency window outside policy' };
   }
 
-  const baseline = qualifyLead(profile);
+  const baseline = qualifyLead(profile, scoringConfig ? {
+    threshold: scoringConfig.threshold,
+    maxUrgencyDays: policy.maximumUrgencyDays ?? 30,
+    requireDecisionMaker: false,
+    requireBudget: false,
+    weights: scoringConfig.weights,
+  } : undefined);
+
   return {
     ...baseline,
     qualified: baseline.score >= policy.qualificationThreshold,
