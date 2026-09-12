@@ -1,0 +1,54 @@
+name: Import source repositories
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-sources:
+    if: ${{ !contains(github.event.head_commit.message, '[automation] import source repositories') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout unified repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Clone source repositories
+        run: |
+          git clone --depth 1 https://github.com/zeerocodez/zeerocodes.git /tmp/zeerocodes
+          git clone --depth 1 https://github.com/zeerocodez/lead-zero.git /tmp/lead-zero
+
+      - name: Import source applications without changing originals
+        run: |
+          rm -rf legacy/zeerocodes legacy/lead-zero
+          mkdir -p legacy/zeerocodes legacy/lead-zero
+          rsync -a --exclude='.git' /tmp/zeerocodes/ legacy/zeerocodes/
+          rsync -a --exclude='.git' /tmp/lead-zero/ legacy/lead-zero/
+
+          cat > docs/SOURCE-IMPORT.md <<'DOC'
+          # Source Import Manifest
+
+          This repository is the production merge target.
+
+          Imported snapshots:
+          - `legacy/zeerocodes` — original Zeerocodes application shell and services.
+          - `legacy/lead-zero` — original Lead Zero application and revenue UI.
+
+          The originals remain untouched. The unified application should progressively move shared functionality into `src/domain`, `src/features`, `src/integrations`, and the final application shell.
+
+          This snapshot is intentionally kept until functional, security, and deployment validation is complete.
+          DOC
+
+      - name: Commit imported sources
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add legacy docs/SOURCE-IMPORT.md
+          git diff --cached --quiet || git commit -m "[automation] import source repositories"
+          git push
