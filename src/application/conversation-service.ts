@@ -24,10 +24,13 @@ export class ConversationService {
   async sendMessage(input: SendMessageInput): Promise<{ conversation: Conversation; message: Message }> {
     const lead = await this.leads.get(input.leadId);
     if (!lead) throw new Error(`Lead not found: ${input.leadId}`);
+    if (lead.organizationId !== input.organizationId) throw new Error('Tenant access denied');
     if (!input.body.trim()) throw new Error('Message body is required');
 
     const now = new Date().toISOString();
     let conversation = await this.conversations.getByLead(input.leadId);
+    if (conversation && conversation.organizationId !== input.organizationId) throw new Error('Tenant access denied');
+
     if (!conversation) {
       conversation = {
         id: id('conv'),
@@ -65,9 +68,17 @@ export class ConversationService {
     return { conversation, message };
   }
 
-  async getConversation(leadId: string) {
+  async getConversation(leadId: string, organizationId: string) {
+    const lead = await this.leads.get(leadId);
+    if (!lead) throw new Error(`Lead not found: ${leadId}`);
+    if (lead.organizationId !== organizationId) throw new Error('Tenant access denied');
+
     const conversation = await this.conversations.getByLead(leadId);
     if (!conversation) return { conversation: null, messages: [] as Message[] };
-    return { conversation, messages: await this.messages.list(conversation.id) };
+    if (conversation.organizationId !== organizationId) throw new Error('Tenant access denied');
+
+    const messages = await this.messages.list(conversation.id);
+    if (messages.some((message) => message.organizationId !== organizationId)) throw new Error('Tenant access denied');
+    return { conversation, messages };
   }
 }
