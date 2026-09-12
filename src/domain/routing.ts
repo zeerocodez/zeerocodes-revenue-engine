@@ -12,9 +12,9 @@ export interface RoutingContext {
 export function routeLead(context: RoutingContext): Route {
   const { score, hasHumanReply, requestedHuman, appointmentBooked } = context;
 
-  if (!score.qualified && score.band === 'cold') return 'nurture';
+  if (score.hardDisqualified) return 'reject';
   if (appointmentBooked) return 'closer';
   if (requestedHuman || hasHumanReply) return 'sdr';
   if (score.qualified) return 'ai-follow-up';
-  return 'nurture';
+  return score.band === 'cold' ? 'nurture' : 'sdr';
 }
