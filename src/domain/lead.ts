@@ -30,3 +30,8 @@ export interface LeadIntakeInput {
   consent?: boolean;
   metadata?: Record<string, unknown>;
 }
+
+/** Every lead is owned by exactly one tenant/client organization. */
+export function belongsToOrganization(lead: LeadRecord, organizationId: string): boolean {
+  return lead.organizationId === organizationId;
+}
