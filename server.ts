@@ -5,14 +5,14 @@ import { ConversationService } from './src/application/conversation-service';
 import { QualificationOrchestrator } from './src/application/qualification-orchestrator';
 import { ClientConfigurationService } from './src/application/client-configuration-service';
 import { RevenueEngineService } from './src/application/revenue-engine-service';
+import { TenantMembershipService } from './src/application/tenant-membership-service';
+import { MembershipIdentityResolver, requireRole, type AuthenticatedRequestContext } from './src/application/request-context';
 import { MemoryClientConfigurationStore } from './src/integrations/memory-client-configuration';
 import { MemoryConversationStore, MemoryMessageStore } from './src/integrations/memory-messaging';
 import { MemoryLeadStore } from './src/integrations/memory-lead-store';
 import { MemoryLeadEventStore } from './src/integrations/memory-lead-events';
 import { MemoryTenantMembershipRepository } from './src/integrations/memory-tenant-membership';
-import { TenantMembershipService } from './src/application/tenant-membership-service';
 import type { ClientConfiguration } from './src/domain/client-configuration';
-import { MembershipIdentityResolver, requireRole, type AuthenticatedRequestContext } from './src/application/request-context';
 import type { TenantRole } from './src/domain/tenant';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -38,7 +38,7 @@ if (process.env.NODE_ENV !== 'production') {
   const validRoles: TenantRole[] = ['viewer', 'agent', 'manager', 'admin', 'owner'];
   if (!validRoles.includes(role)) throw new Error('Invalid DEV_USER_ROLE');
   membershipRepository.seedTenant({ id: tenantId, name: 'Demo Tenant', slug: 'demo-tenant', status: 'active', createdAt: new Date().toISOString() });
-  membershipRepository.seedMembership({ id: userId, tenantId, email: process.env.DEV_USER_EMAIL || 'demo@example.com', role, active: true, createdAt: new Date().toISOString() });
+  membershipRepository.seedMembership({ id: `membership_${userId}_${tenantId}`, userId, tenantId, email: process.env.DEV_USER_EMAIL || 'demo@example.com', role, active: true, createdAt: new Date().toISOString() });
 }
 
 app.use(express.json());
