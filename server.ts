@@ -3,13 +3,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RevenueEngineService } from './src/application/revenue-engine-service';
 import { MemoryLeadStore } from './src/integrations/memory-lead-store';
+import { MemoryLeadEventStore } from './src/integrations/memory-lead-events';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const leadStore = new MemoryLeadStore();
-const revenueEngine = new RevenueEngineService(leadStore);
+const leadEventStore = new MemoryLeadEventStore();
+const revenueEngine = new RevenueEngineService(leadStore, undefined, leadEventStore);
 
 app.use(express.json());
 
@@ -35,6 +37,12 @@ app.get('/api/leads/:id', async (req, res) => {
   const lead = await leadStore.get(req.params.id);
   if (!lead) return res.status(404).json({ error: 'Lead not found' });
   return res.json({ lead });
+});
+
+app.get('/api/leads/:id/events', async (req, res) => {
+  const lead = await leadStore.get(req.params.id);
+  if (!lead) return res.status(404).json({ error: 'Lead not found' });
+  return res.json({ events: await leadEventStore.list(req.params.id) });
 });
 
 app.post('/api/leads/:id/redecide', async (req, res) => {
