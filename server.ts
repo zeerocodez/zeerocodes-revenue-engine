@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ConversationService } from './src/application/conversation-service';
 import { RevenueEngineService } from './src/application/revenue-engine-service';
+import { decideConversation } from './src/domain/conversation-decision-engine';
 import { MemoryConversationStore, MemoryMessageStore } from './src/integrations/memory-messaging';
 import { MemoryLeadStore } from './src/integrations/memory-lead-store';
 import { MemoryLeadEventStore } from './src/integrations/memory-lead-events';
@@ -78,8 +79,7 @@ app.get('/api/leads/:id/events', async (req, res) => {
 app.get('/api/leads/:id/conversation', async (req, res) => {
   try {
     const tenantId = tenantIdFromRequest(req);
-    await revenueEngine.getLeadForOrganization(req.params.id, tenantId);
-    return res.json(await conversationService.getConversation(req.params.id));
+    return res.json(await conversationService.getConversation(req.params.id, tenantId));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to load conversation';
     return res.status(message === 'Tenant access denied' ? 403 : message.startsWith('Lead not found') ? 404 : 400).json({ error: message });
@@ -94,6 +94,32 @@ app.post('/api/leads/:id/messages', async (req, res) => {
     return res.status(201).json(result);
   } catch (error) {
     return res.status(tenantError(error)).json({ error: error instanceof Error ? error.message : 'Unable to send message' });
+  }
+});
+
+app.post('/api/leads/:id/conversation-decision', async (req, res) => {
+  try {
+    const tenantId = tenantIdFromRequest(req);
+    const lead = await revenueEngine.getLeadForOrganization(req.params.id, tenantId);
+    const text = String(req.body.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Conversation text is required' });
+    const decision = decideConversation({
+      text,
+      leadScore: lead.qualification ? {
+        score: lead.qualification.score,
+        band: lead.qualification.score >= 80 ? 'hot' : lead.qualification.score >= 50 ? 'warm' : 'cold',
+        qualified: lead.qualification.qualified,
+        reasons: lead.qualification.reasons,
+        hardDisqualified: lead.qualification.hardDisqualified,
+      } : { score: 0, band: 'cold', qualified: false, reasons: [], hardDisqualified: false },
+      consent: lead.consent,
+      appointmentBooked: lead.state === 'booked',
+      qualificationComplete: Boolean(lead.qualification),
+    });
+    return res.json({ decision });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to decide conversation action';
+    return res.status(message === 'Tenant access denied' ? 403 : message.startsWith('Lead not found') ? 404 : 400).json({ error: message });
   }
 });
 
