@@ -6,6 +6,7 @@ export interface LeadScore {
   band: 'cold' | 'warm' | 'hot';
   qualified: boolean;
   reasons: string[];
+  hardDisqualified: boolean;
 }
 
 export function scoreLead(profile: QualificationProfile): LeadScore {
