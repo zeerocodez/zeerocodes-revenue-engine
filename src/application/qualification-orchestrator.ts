@@ -8,56 +8,19 @@ import type { ClientConfiguration } from '../domain/client-configuration';
 import type { LeadStore } from './revenue-engine-service';
 import type { LeadEventStore } from '../domain/lead-events';
 
-export interface QualificationOrchestratorInput {
-  leadId: string;
-  organizationId: string;
-  text: string;
-  policy?: ClientQualificationPolicy;
-  configuration?: ClientConfiguration;
-}
-
-export interface QualificationOrchestratorResult {
-  lead: LeadRecord;
-  conversationDecision: ConversationDecision;
-  progress: QualificationProgress;
-  nextQuestion?: string;
-  extractedFields: Partial<Record<QualificationField, string | number | boolean>>;
-  stateChanged: boolean;
-}
+export interface QualificationOrchestratorInput { leadId: string; organizationId: string; text: string; policy?: ClientQualificationPolicy; configuration?: ClientConfiguration; }
+export interface QualificationOrchestratorResult { lead: LeadRecord; conversationDecision: ConversationDecision; progress: QualificationProgress; nextQuestion?: string; extractedFields: Partial<Record<QualificationField, string | number | boolean>>; stateChanged: boolean; }
 
 function extractAnswers(text: string): Partial<Record<QualificationField, string | number | boolean>> {
-  const value = text.trim();
-  const lower = value.toLowerCase();
-  const result: Partial<Record<QualificationField, string | number | boolean>> = {};
-
-  if (/\b(yes|yeah|yep|correct|exactly|that'?s right)\b/i.test(value)) {
-    result.serviceFit = true;
-    result.needConfirmed = true;
-  }
+  const value = text.trim(); const lower = value.toLowerCase(); const result: Partial<Record<QualificationField, string | number | boolean>> = {};
+  if (/\b(yes|yeah|yep|correct|exactly|that'?s right)\b/i.test(value)) { result.serviceFit = true; result.needConfirmed = true; }
   if (/\b(no|nope|not really|not interested)\b/i.test(value)) result.serviceFit = false;
-  if (/\b(i am|i'm|im|yes,? i)\b.*\b(decision maker|owner|boss|director|manager)\b/i.test(value) || /\b(i|we) (own|run) the business\b/i.test(value)) {
-    result.decisionMaker = true;
-  }
+  if (/\b(i am|i'm|im|yes,? i)\b.*\b(decision maker|owner|boss|director|manager)\b/i.test(value) || /\b(i|we) (own|run) the business\b/i.test(value)) result.decisionMaker = true;
   if (/\b(not me|someone else|my boss|my partner|my manager)\b/i.test(value)) result.decisionMaker = false;
-
   const budget = value.match(/(?:₦|ngn|n)\s*([\d,]+(?:\.\d+)?)\s*(k|m|million|thousand)?\b/i) || value.match(/\b([\d,]+(?:\.\d+)?)\s*(k|m|million|thousand)\b/i);
-  if (budget) {
-    let amount = Number(budget[1].replace(/,/g, ''));
-    const unit = (budget[2] || '').toLowerCase();
-    if (unit === 'k' || unit === 'thousand') amount *= 1_000;
-    if (unit === 'm' || unit === 'million') amount *= 1_000_000;
-    if (Number.isFinite(amount)) result.budget = amount;
-  }
-
-  if (/\b(today|now|immediately|asap)\b/i.test(value)) result.urgencyDays = 0;
-  else if (/\btomorrow\b/i.test(value)) result.urgencyDays = 1;
-  else {
-    const days = lower.match(/\b(?:in|within)\s+(\d+)\s+days?\b/);
-    if (days) result.urgencyDays = Number(days[1]);
-  }
-
+  if (budget) { let amount = Number(budget[1].replace(/,/g, '')); const unit = (budget[2] || '').toLowerCase(); if (unit === 'k' || unit === 'thousand') amount *= 1_000; if (unit === 'm' || unit === 'million') amount *= 1_000_000; if (Number.isFinite(amount)) result.budget = amount; }
+  if (/\b(today|now|immediately|asap)\b/i.test(value)) result.urgencyDays = 0; else if (/\btomorrow\b/i.test(value)) result.urgencyDays = 1; else { const days = lower.match(/\b(?:in|within)\s+(\d+)\s+days?\b/); if (days) result.urgencyDays = Number(days[1]); }
   if (/\b(lagos|abuja|port harcourt|ibadan|calabar|enugu|benin|online|remote|nationwide)\b/i.test(value)) result.locationFit = true;
-
   if (value.length > 20 && !result.needConfirmed) result.needConfirmed = true;
   return result;
 }
@@ -71,45 +34,27 @@ function desiredState(lead: LeadRecord, decision: ConversationDecision): LeadSta
 }
 
 export class QualificationOrchestrator {
-  constructor(
-    private readonly leads: LeadStore,
-    private readonly events?: LeadEventStore,
-  ) {}
+  constructor(private readonly leads: LeadStore, private readonly events?: LeadEventStore) {}
 
   async process(input: QualificationOrchestratorInput): Promise<QualificationOrchestratorResult> {
     if (!input.text.trim()) throw new Error('Conversation text is required');
     const lead = await this.leads.get(input.leadId);
     if (!lead) throw new Error(`Lead not found: ${input.leadId}`);
     if (lead.organizationId !== input.organizationId) throw new Error('Tenant access denied');
-
     const policy = input.configuration?.qualification ?? input.policy;
     if (!policy) throw new Error('Client qualification configuration is required');
 
     const extractedFields = extractAnswers(input.text);
     lead.profile = { ...lead.profile, ...extractedFields };
-
-    const policyResult = evaluateClientPolicy(lead.profile, policy);
-    const score = scoreLead(lead.profile);
+    const scoringConfig = input.configuration?.scoring;
+    const policyResult = evaluateClientPolicy(lead.profile, policy, scoringConfig);
+    const score = scoreLead(lead.profile, scoringConfig);
     lead.score = score.score;
-    lead.qualification = {
-      score: score.score,
-      qualified: policyResult.qualified,
-      reasons: policyResult.reasons,
-      hardDisqualified: policyResult.hardDisqualified,
-    };
+    lead.qualification = { score: score.score, qualified: policyResult.qualified, reasons: policyResult.reasons, hardDisqualified: policyResult.hardDisqualified };
 
-    const asked = Array.isArray(lead.metadata?.qualificationAsked)
-      ? lead.metadata.qualificationAsked.filter((field): field is QualificationField => typeof field === 'string')
-      : [];
+    const asked = Array.isArray(lead.metadata?.qualificationAsked) ? lead.metadata.qualificationAsked.filter((field): field is QualificationField => typeof field === 'string') : [];
     const progress = getQualificationProgress(lead.profile, policy, asked);
-    const conversationDecision = decideConversation({
-      text: input.text,
-      leadScore: { ...score, qualified: policyResult.qualified, hardDisqualified: policyResult.hardDisqualified },
-      consent: lead.consent,
-      appointmentBooked: lead.state === 'booked',
-      qualificationComplete: progress.complete,
-    });
-
+    const conversationDecision = decideConversation({ text: input.text, leadScore: { ...score, qualified: policyResult.qualified, hardDisqualified: policyResult.hardDisqualified }, consent: lead.consent, appointmentBooked: lead.state === 'booked', qualificationComplete: progress.complete });
     const nextQuestion = getNextQualificationQuestion(lead.profile, policy, asked);
     if (nextQuestion && !asked.includes(nextQuestion.field)) asked.push(nextQuestion.field);
 
@@ -117,45 +62,13 @@ export class QualificationOrchestrator {
     const targetState = desiredState(lead, conversationDecision);
     const stateChanged = canTransition(previousState, targetState) && previousState !== targetState;
     if (stateChanged) lead.state = transitionLead(previousState, targetState);
-    lead.decision = {
-      action: conversationDecision.action === 'handoff-closer' ? 'closer-handoff'
-        : conversationDecision.action === 'escalate-sdr' || conversationDecision.action === 'escalate-complaint' ? 'sdr-follow-up'
-        : conversationDecision.action === 'opt-out' ? 'reject'
-        : 'ai-follow-up',
-      route: conversationDecision.owner === 'closer' ? 'closer' : conversationDecision.owner === 'sdr' ? 'sdr' : 'ai-follow-up',
-      reason: conversationDecision.reason,
-    };
+    lead.decision = { action: conversationDecision.action === 'handoff-closer' ? 'closer-handoff' : conversationDecision.action === 'escalate-sdr' || conversationDecision.action === 'escalate-complaint' ? 'sdr-follow-up' : conversationDecision.action === 'opt-out' ? 'reject' : 'ai-follow-up', route: conversationDecision.owner === 'closer' ? 'closer' : conversationDecision.owner === 'sdr' ? 'sdr' : 'ai-follow-up', reason: conversationDecision.reason };
     lead.metadata = { ...lead.metadata, qualificationAsked: asked, lastConversationDecision: conversationDecision, configurationVersion: input.configuration?.version };
     lead.updatedAt = new Date().toISOString();
     await this.leads.save(lead);
 
-    await this.events?.append({
-      id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      leadId: lead.id,
-      organizationId: lead.organizationId,
-      type: 'lead.scored',
-      actor: 'system',
-      timestamp: new Date().toISOString(),
-      fromState: previousState,
-      toState: lead.state,
-      reason: conversationDecision.reason,
-      metadata: { extractedFields, score: score.score, qualified: policyResult.qualified, nextQuestion: nextQuestion?.id, configurationVersion: input.configuration?.version },
-    });
-
-    if (stateChanged) {
-      await this.events?.append({
-        id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        leadId: lead.id,
-        organizationId: lead.organizationId,
-        type: 'lead.state_changed',
-        actor: 'system',
-        timestamp: new Date().toISOString(),
-        fromState: previousState,
-        toState: lead.state,
-        reason: conversationDecision.reason,
-      });
-    }
-
+    await this.events?.append({ id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, leadId: lead.id, organizationId: lead.organizationId, type: 'lead.scored', actor: 'system', timestamp: new Date().toISOString(), fromState: previousState, toState: lead.state, reason: conversationDecision.reason, metadata: { extractedFields, score: score.score, qualified: policyResult.qualified, nextQuestion: nextQuestion?.id, configurationVersion: input.configuration?.version } });
+    if (stateChanged) await this.events?.append({ id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, leadId: lead.id, organizationId: lead.organizationId, type: 'lead.state_changed', actor: 'system', timestamp: new Date().toISOString(), fromState: previousState, toState: lead.state, reason: conversationDecision.reason });
     return { lead, conversationDecision, progress, nextQuestion: nextQuestion?.prompt, extractedFields, stateChanged };
   }
 }
