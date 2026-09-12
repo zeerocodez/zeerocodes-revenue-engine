@@ -32,7 +32,7 @@ describe('ConversationService', () => {
     expect(result.conversation.status).toBe('open');
     expect(result.conversation.owner).toBe('ai');
     expect(result.message.direction).toBe('inbound');
-    expect((await service.getConversation('lead_1')).messages).toHaveLength(1);
+    expect((await service.getConversation('lead_1', 'org_1')).messages).toHaveLength(1);
   });
 
   it('rejects blank messages', async () => {
@@ -50,5 +50,43 @@ describe('ConversationService', () => {
 
     const service = new ConversationService(leads, new MemoryConversationStore(), new MemoryMessageStore());
     await expect(service.sendMessage({ leadId: 'lead_2', organizationId: 'org_1', body: '   ' })).rejects.toThrow('Message body is required');
+  });
+
+  it('blocks cross-tenant message writes', async () => {
+    const leads = new MemoryLeadStore();
+    await leads.save({
+      id: 'lead_3',
+      organizationId: 'org_a',
+      name: 'Chioma',
+      state: 'contacting',
+      profile: {},
+      consent: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const service = new ConversationService(leads, new MemoryConversationStore(), new MemoryMessageStore());
+    await expect(service.sendMessage({ leadId: 'lead_3', organizationId: 'org_b', body: 'hello', actor: 'lead' })).rejects.toThrow('Tenant access denied');
+  });
+
+  it('blocks cross-tenant conversation reads', async () => {
+    const leads = new MemoryLeadStore();
+    const conversations = new MemoryConversationStore();
+    const messages = new MemoryMessageStore();
+    const service = new ConversationService(leads, conversations, messages);
+
+    await leads.save({
+      id: 'lead_4',
+      organizationId: 'org_a',
+      name: 'Tunde',
+      state: 'contacting',
+      profile: {},
+      consent: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    await service.sendMessage({ leadId: 'lead_4', organizationId: 'org_a', body: 'hello', actor: 'lead' });
+
+    await expect(service.getConversation('lead_4', 'org_b')).rejects.toThrow('Tenant access denied');
   });
 });
