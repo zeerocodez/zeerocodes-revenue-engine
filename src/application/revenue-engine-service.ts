@@ -1,7 +1,7 @@
 import { qualifyLead } from '../domain/qualification';
 import { createAuditEvent, type AuditEvent } from '../domain/audit';
 import { decideLeadAction, type DecisionResult } from '../domain/decision-engine';
-import { transitionLead, type LeadState } from '../domain/lead-state';
+import { canTransition, transitionLead, type LeadState } from '../domain/lead-state';
 import type { LeadIntakeInput, LeadRecord } from '../domain/lead';
 import { scoreLead } from '../domain/scoring';
 import type { ClientQualificationPolicy } from '../domain/client-policy';
@@ -108,30 +108,9 @@ export class RevenueEngineService {
       metadata: { score: score.score, qualified: policyResult.qualified, route: decision.route },
     });
 
-    await this.eventStore?.append(toLeadEvent(
-      lead,
-      'lead.created',
-      'lead captured',
-      undefined,
-      lead.state,
-      { source: input.source },
-    ));
-    await this.eventStore?.append(toLeadEvent(
-      lead,
-      'lead.scored',
-      decision.reason,
-      lead.state,
-      lead.state,
-      { score: score.score, band: score.band, qualified: policyResult.qualified },
-    ));
-    await this.eventStore?.append(toLeadEvent(
-      lead,
-      'lead.routed',
-      decision.reason,
-      lead.state,
-      lead.state,
-      { route: decision.route, action: decision.action },
-    ));
+    await this.eventStore?.append(toLeadEvent(lead, 'lead.created', 'lead captured', undefined, lead.state, { source: input.source }));
+    await this.eventStore?.append(toLeadEvent(lead, 'lead.scored', decision.reason, lead.state, lead.state, { score: score.score, band: score.band, qualified: policyResult.qualified }));
+    await this.eventStore?.append(toLeadEvent(lead, 'lead.routed', decision.reason, lead.state, lead.state, { route: decision.route, action: decision.action }));
 
     return { lead, decision, auditEvent };
   }
@@ -158,8 +137,8 @@ export class RevenueEngineService {
       : decision.action === 'nurture' ? 'nurture'
       : decision.action === 'closer-handoff' ? 'booked'
       : 'contacting';
+    const nextState = canTransition(previousState, desiredState) ? transitionLead(previousState, desiredState) : previousState;
 
-    const nextState = transitionLead(previousState, desiredState);
     lead.state = nextState;
     lead.score = score.score;
     lead.qualification = { ...lead.qualification, score: score.score, qualified: policyResult.qualified, reasons: policyResult.reasons, hardDisqualified: policyResult.hardDisqualified };
@@ -173,38 +152,17 @@ export class RevenueEngineService {
       actor: 'system',
       action: 'lead_redecision',
       fromState: previousState,
-      toState: lead.state,
+      toState: nextState,
       reason: decision.reason,
       source: lead.source,
-      metadata: { score: score.score, qualified: policyResult.qualified, route: decision.route },
+      metadata: { score: score.score, qualified: policyResult.qualified, route: decision.route, statePreserved: nextState === previousState && desiredState !== previousState },
     });
 
-    await this.eventStore?.append(toLeadEvent(
-      lead,
-      'lead.scored',
-      'decision recalculated',
-      previousState,
-      nextState,
-      { score: score.score, band: score.band, qualified: policyResult.qualified },
-    ));
+    await this.eventStore?.append(toLeadEvent(lead, 'lead.scored', 'decision recalculated', previousState, nextState, { score: score.score, band: score.band, qualified: policyResult.qualified }));
     if (previousState !== nextState) {
-      await this.eventStore?.append(toLeadEvent(
-        lead,
-        'lead.state_changed',
-        decision.reason,
-        previousState,
-        nextState,
-        { route: decision.route, action: decision.action },
-      ));
+      await this.eventStore?.append(toLeadEvent(lead, 'lead.state_changed', decision.reason, previousState, nextState, { route: decision.route, action: decision.action }));
     }
-    await this.eventStore?.append(toLeadEvent(
-      lead,
-      decision.action === 'reject' ? 'lead.rejected' : 'lead.routed',
-      decision.reason,
-      nextState,
-      nextState,
-      { route: decision.route, action: decision.action },
-    ));
+    await this.eventStore?.append(toLeadEvent(lead, decision.action === 'reject' ? 'lead.rejected' : 'lead.routed', decision.reason, nextState, nextState, { route: decision.route, action: decision.action, statePreserved: nextState === previousState && desiredState !== previousState }));
 
     return { lead, decision, auditEvent };
   }
