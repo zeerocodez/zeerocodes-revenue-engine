@@ -54,6 +54,9 @@ export class RevenueEngineService {
   ) {}
 
   async intake(input: LeadIntakeInput): Promise<LeadDecisionResponse> {
+    if (!input.organizationId?.trim()) throw new Error('organizationId is required');
+    if (!input.name?.trim()) throw new Error('lead name is required');
+
     const now = new Date().toISOString();
     const profile = input.profile ?? {};
     const qualification = qualifyLead(profile);
@@ -80,7 +83,7 @@ export class RevenueEngineService {
     const lead: LeadRecord = {
       id: id('lead'),
       organizationId: input.organizationId,
-      name: input.name,
+      name: input.name.trim(),
       email: input.email,
       phone: input.phone,
       source: input.source,
@@ -115,9 +118,17 @@ export class RevenueEngineService {
     return { lead, decision, auditEvent };
   }
 
-  async redecide(id: string): Promise<LeadDecisionResponse> {
+  async getLeadForOrganization(id: string, organizationId: string): Promise<LeadRecord> {
     const lead = await this.store.get(id);
     if (!lead) throw new Error(`Lead not found: ${id}`);
+    if (lead.organizationId !== organizationId) throw new Error('Tenant access denied');
+    return lead;
+  }
+
+  async redecide(id: string, organizationId?: string): Promise<LeadDecisionResponse> {
+    const lead = await this.store.get(id);
+    if (!lead) throw new Error(`Lead not found: ${id}`);
+    if (organizationId && lead.organizationId !== organizationId) throw new Error('Tenant access denied');
 
     const previousState = lead.state;
     const score = scoreLead(lead.profile);
@@ -159,9 +170,7 @@ export class RevenueEngineService {
     });
 
     await this.eventStore?.append(toLeadEvent(lead, 'lead.scored', 'decision recalculated', previousState, nextState, { score: score.score, band: score.band, qualified: policyResult.qualified }));
-    if (previousState !== nextState) {
-      await this.eventStore?.append(toLeadEvent(lead, 'lead.state_changed', decision.reason, previousState, nextState, { route: decision.route, action: decision.action }));
-    }
+    if (previousState !== nextState) await this.eventStore?.append(toLeadEvent(lead, 'lead.state_changed', decision.reason, previousState, nextState, { route: decision.route, action: decision.action }));
     await this.eventStore?.append(toLeadEvent(lead, decision.action === 'reject' ? 'lead.rejected' : 'lead.routed', decision.reason, nextState, nextState, { route: decision.route, action: decision.action, statePreserved: nextState === previousState && desiredState !== previousState }));
 
     return { lead, decision, auditEvent };
