@@ -10,11 +10,28 @@ describe('qualification engine', () => {
     const result = qualifyLead({ serviceFit: true, needConfirmed: true, decisionMaker: true, locationFit: true, urgencyDays: 7, budget: 100000 });
     expect(result.score).toBe(100);
     expect(result.qualified).toBe(true);
+    expect(result.hardDisqualified).toBe(false);
   });
 
   it('does not qualify a weak lead', () => {
     const result = qualifyLead({ serviceFit: true, needConfirmed: false, decisionMaker: false, locationFit: false, urgencyDays: 60, budget: null });
     expect(result.qualified).toBe(false);
+  });
+
+  it('supports client-specific hard disqualification rules', () => {
+    const result = qualifyLead(
+      { serviceFit: true, needConfirmed: true, decisionMaker: false, locationFit: true, urgencyDays: 2, budget: 100000 },
+      {
+        threshold: 70,
+        weights: { serviceFit: 25, needConfirmed: 20, decisionMaker: 20, locationFit: 15, urgency: 10, budget: 10 },
+        maxUrgencyDays: 14,
+        requireDecisionMaker: true,
+        requireBudget: false,
+      },
+    );
+    expect(result.hardDisqualified).toBe(true);
+    expect(result.qualified).toBe(false);
+    expect(routeLead({ score: { ...scoreLead({ serviceFit: true }), hardDisqualified: true } })).toBe('reject');
   });
 });
 
