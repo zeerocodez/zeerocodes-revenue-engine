@@ -4,65 +4,91 @@ import type { LeadRecord } from '../domain/lead';
 import type { Message, MessageStore } from '../domain/message';
 import type { LeadStore } from './revenue-engine-service';
 
-export interface TenantScopedLeadRepository extends LeadStore {
+export interface TenantLeadRepository extends LeadStore {
   getForTenant(id: string, organizationId: string): Promise<LeadRecord | null>;
 }
 
-export interface TenantScopedConversationRepository extends ConversationStore {
+export class TenantLeadRepositoryImpl implements TenantLeadRepository {
+  constructor(private readonly delegate: LeadStore) {}
+
+  get(id: string) { return this.delegate.get(id); }
+  save(lead: LeadRecord) {
+    if (!lead.organizationId) throw new Error('Lead tenant is required');
+    return this.delegate.save(lead);
+  }
+  list(organizationId: string) { return this.delegate.list(organizationId); }
+
+  async getForTenant(id: string, organizationId: string) {
+    const lead = await this.delegate.get(id);
+    if (!lead || lead.organizationId !== organizationId) return null;
+    return lead;
+  }
+}
+
+export interface TenantConversationRepository extends ConversationStore {
   getForTenant(id: string, organizationId: string): Promise<Conversation | null>;
   getByLeadForTenant(leadId: string, organizationId: string): Promise<Conversation | null>;
 }
 
-export interface TenantScopedMessageRepository extends MessageStore {
+export class TenantConversationRepositoryImpl implements TenantConversationRepository {
+  constructor(private readonly delegate: ConversationStore) {}
+
+  get(id: string) { return this.delegate.get(id); }
+  save(conversation: Conversation) {
+    if (!conversation.organizationId) throw new Error('Conversation tenant is required');
+    return this.delegate.save(conversation);
+  }
+  getByLead(leadId: string) { return this.delegate.getByLead(leadId); }
+
+  async getForTenant(id: string, organizationId: string) {
+    const conversation = await this.delegate.get(id);
+    if (!conversation || conversation.organizationId !== organizationId) return null;
+    return conversation;
+  }
+
+  async getByLeadForTenant(leadId: string, organizationId: string) {
+    const conversation = await this.delegate.getByLead(leadId);
+    if (!conversation || conversation.organizationId !== organizationId) return null;
+    return conversation;
+  }
+}
+
+export interface TenantMessageRepository extends MessageStore {
   listForTenant(conversationId: string, organizationId: string): Promise<Message[]>;
 }
 
-export interface TenantScopedLeadEventRepository extends LeadEventStore {
+export class TenantMessageRepositoryImpl implements TenantMessageRepository {
+  constructor(private readonly delegate: MessageStore) {}
+
+  async append(message: Message) {
+    if (!message.organizationId) throw new Error('Message tenant is required');
+    return this.delegate.append(message);
+  }
+
+  list(conversationId: string) { return this.delegate.list(conversationId); }
+
+  async listForTenant(conversationId: string, organizationId: string) {
+    const messages = await this.delegate.list(conversationId);
+    return messages.filter((message) => message.organizationId === organizationId);
+  }
+}
+
+export interface TenantLeadEventRepository extends LeadEventStore {
   listForTenant(leadId: string, organizationId: string): Promise<LeadEvent[]>;
 }
 
-export class TenantRepository implements TenantScopedLeadRepository, TenantScopedConversationRepository, TenantScopedMessageRepository, TenantScopedLeadEventRepository {
-  constructor(
-    private readonly leads: LeadStore,
-    private readonly conversations: ConversationStore,
-    private readonly messages: MessageStore,
-    private readonly events: LeadEventStore,
-  ) {}
+export class TenantLeadEventRepositoryImpl implements TenantLeadEventRepository {
+  constructor(private readonly delegate: LeadEventStore) {}
 
-  async get(id: string) { return this.leads.get(id); }
-  async getForTenant(id: string, organizationId: string) {
-    const lead = await this.leads.get(id);
-    if (!lead || lead.organizationId !== organizationId) return null;
-    return lead;
-  }
-  async save(lead: LeadRecord) { return this.leads.save(lead); }
-  async list(organizationId: string) { return this.leads.list(organizationId); }
-
-  async getConversation(id: string) { return this.conversations.get(id); }
-  async getForTenant(id: string, organizationId: string) {
-    const conversation = await this.conversations.get(id);
-    if (!conversation || conversation.organizationId !== organizationId) return null;
-    return conversation;
-  }
-  async getByLead(leadId: string) { return this.conversations.getByLead(leadId); }
-  async getByLeadForTenant(leadId: string, organizationId: string) {
-    const conversation = await this.conversations.getByLead(leadId);
-    if (!conversation || conversation.organizationId !== organizationId) return null;
-    return conversation;
-  }
-  async saveConversation(conversation: Conversation) { return this.conversations.save(conversation); }
-
-  async append(message: Message) { return this.messages.append(message); }
-  async list(conversationId: string) { return this.messages.list(conversationId); }
-  async listForTenant(conversationId: string, organizationId: string) {
-    const messages = await this.messages.list(conversationId);
-    return messages.filter((message) => message.organizationId === organizationId);
+  async append(event: LeadEvent) {
+    if (!event.organizationId) throw new Error('Event tenant is required');
+    return this.delegate.append(event);
   }
 
-  async appendEvent(event: LeadEvent) { return this.events.append(event); }
-  async listEvents(leadId: string) { return this.events.list(leadId); }
+  list(leadId: string) { return this.delegate.list(leadId); }
+
   async listForTenant(leadId: string, organizationId: string) {
-    const events = await this.events.list(leadId);
+    const events = await this.delegate.list(leadId);
     return events.filter((event) => event.organizationId === organizationId);
   }
 }
