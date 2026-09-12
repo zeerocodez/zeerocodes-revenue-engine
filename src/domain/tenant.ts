@@ -11,6 +11,7 @@ export interface TenantRecord {
 export interface TenantUser {
   id: string;
   tenantId: string;
+  userId: string;
   email: string;
   role: TenantRole;
   active: boolean;
