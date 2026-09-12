@@ -5,23 +5,24 @@ export class PostgresRevenueWorkflowRepository {
   constructor(private readonly db: PostgresDatabase) {}
 
   async saveAppointment(record: AppointmentRecord): Promise<void> {
-    await this.db.query(`insert into appointments (id,organization_id,lead_id,scheduled_at,status,owner_user_id,source,metadata,created_at,updated_at)
-      values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)
-      on conflict (id) do update set scheduled_at=excluded.scheduled_at,status=excluded.status,owner_user_id=excluded.owner_user_id,source=excluded.source,metadata=excluded.metadata,updated_at=excluded.updated_at`,
-      [record.id,record.organizationId,record.leadId,record.scheduledAt,record.status,record.ownerUserId ?? null,record.source ?? null,json(record.metadata),record.createdAt,record.updatedAt]);
+    await this.db.query(`insert into appointments (id,organization_id,lead_id,scheduled_at,status,owner_user_id,source,idempotency_key,metadata,created_at,updated_at)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)
+      on conflict (organization_id,idempotency_key) where idempotency_key is not null do update set scheduled_at=excluded.scheduled_at,status=excluded.status,owner_user_id=excluded.owner_user_id,source=excluded.source,metadata=excluded.metadata,updated_at=excluded.updated_at`,
+      [record.id,record.organizationId,record.leadId,record.scheduledAt,record.status,record.ownerUserId ?? null,record.source ?? null,record.idempotencyKey ?? null,json(record.metadata),record.createdAt,record.updatedAt]);
   }
 
   async listAppointments(organizationId: string, leadId?: string): Promise<AppointmentRecord[]> {
     const r = leadId
       ? await this.db.query<any>('select * from appointments where organization_id=$1 and lead_id=$2 order by scheduled_at desc',[organizationId,leadId])
       : await this.db.query<any>('select * from appointments where organization_id=$1 order by scheduled_at desc',[organizationId]);
-    return r.rows.map((row) => ({ id:row.id,organizationId:row.organization_id,leadId:row.lead_id,scheduledAt:new Date(row.scheduled_at).toISOString(),status:row.status,ownerUserId:row.owner_user_id ?? undefined,source:row.source ?? undefined,metadata:parseJson(row.metadata,{}),createdAt:new Date(row.created_at).toISOString(),updatedAt:new Date(row.updated_at).toISOString() }));
+    return r.rows.map((row) => ({ id:row.id,organizationId:row.organization_id,leadId:row.lead_id,scheduledAt:new Date(row.scheduled_at).toISOString(),status:row.status,ownerUserId:row.owner_user_id ?? undefined,source:row.source ?? undefined,idempotencyKey:row.idempotency_key ?? undefined,metadata:parseJson(row.metadata,{}),createdAt:new Date(row.created_at).toISOString(),updatedAt:new Date(row.updated_at).toISOString() }));
   }
 
   async saveOutcome(record: LeadOutcomeRecord): Promise<void> {
-    await this.db.query(`insert into lead_outcomes (id,organization_id,lead_id,outcome,revenue_amount,currency,reason,owner_user_id,occurred_at,metadata)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`,
-      [record.id,record.organizationId,record.leadId,record.outcome,record.revenueAmount ?? null,record.currency,record.reason ?? null,record.ownerUserId ?? null,record.occurredAt,json(record.metadata)]);
+    await this.db.query(`insert into lead_outcomes (id,organization_id,lead_id,outcome,revenue_amount,currency,reason,owner_user_id,idempotency_key,occurred_at,metadata)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+      on conflict (organization_id,idempotency_key) where idempotency_key is not null do update set outcome=excluded.outcome,revenue_amount=excluded.revenue_amount,currency=excluded.currency,reason=excluded.reason,owner_user_id=excluded.owner_user_id,occurred_at=excluded.occurred_at,metadata=excluded.metadata`,
+      [record.id,record.organizationId,record.leadId,record.outcome,record.revenueAmount ?? null,record.currency,record.reason ?? null,record.ownerUserId ?? null,record.idempotencyKey ?? null,record.occurredAt,json(record.metadata)]);
   }
 
   async saveAttribution(record: RevenueAttributionRecord): Promise<void> {
@@ -33,7 +34,7 @@ export class PostgresRevenueWorkflowRepository {
   async recordUsage(entry: UsageLedgerEntry): Promise<boolean> {
     const r = await this.db.query(`insert into usage_ledger (id,organization_id,lead_id,event_type,quantity,unit_price,currency,idempotency_key,metadata)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) on conflict (organization_id,idempotency_key) do nothing`,
-      [entry.id,entry.organizationId,entry.leadId ?? null,entry.eventType,entry.quantity,entry.unitPrice,entry.currency,entry.idempotencyKey,json(entry.metadata)]);
+      [entry.id,entry.organizationId,entry.leadId ?? null,entry.eventType,entry.quantity,entry.unitPrice,entry.currency,json(entry.metadata)]);
     return r.rowCount === 1;
   }
 
