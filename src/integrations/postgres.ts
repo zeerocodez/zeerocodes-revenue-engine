@@ -1,4 +1,8 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg';
+
+type RequestDbContext = { client: PoolClient; tenantId: string };
+const requestDbContext = new AsyncLocalStorage<RequestDbContext>();
 
 export class PostgresDatabase {
   readonly pool: Pool;
@@ -9,7 +13,33 @@ export class PostgresDatabase {
   }
 
   async query<T extends QueryResultRow = QueryResultRow>(text: string, values: unknown[] = []): Promise<QueryResult<T>> {
-    return this.pool.query<T>(text, values);
+    const context = requestDbContext.getStore();
+    return context ? context.client.query<T>(text, values) : this.pool.query<T>(text, values);
+  }
+
+  async withRequestTenant(tenantId: string, next: () => void, onError: (error: unknown) => void): Promise<void> {
+    if (!tenantId.trim()) throw new Error('Tenant context is required');
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("SELECT set_config('app.tenant_id', $1, true)",[tenantId]);
+      requestDbContext.run({ client, tenantId }, () => {
+        void Promise.resolve().then(next).catch(onError);
+      });
+    } catch (error) {
+      client.release();
+      throw error;
+    }
+  }
+
+  async finishRequestTenant(commit: boolean): Promise<void> {
+    const context = requestDbContext.getStore();
+    if (!context) return;
+    try {
+      await context.client.query(commit ? 'COMMIT' : 'ROLLBACK');
+    } finally {
+      context.client.release();
+    }
   }
 
   async withTenant<T>(tenantId: string, work: (client: PoolClient) => Promise<T>): Promise<T> {
@@ -17,7 +47,7 @@ export class PostgresDatabase {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
+      await client.query("SELECT set_config('app.tenant_id', $1, true)",[tenantId]);
       const result = await work(client);
       await client.query('COMMIT');
       return result;
@@ -29,17 +59,8 @@ export class PostgresDatabase {
     }
   }
 
-  async close(): Promise<void> {
-    await this.pool.end();
-  }
+  async close(): Promise<void> { await this.pool.end(); }
 }
 
-export function json(value: unknown): string {
-  return JSON.stringify(value ?? {});
-}
-
-export function parseJson<T>(value: unknown, fallback: T): T {
-  if (value == null) return fallback;
-  if (typeof value === 'string') return JSON.parse(value) as T;
-  return value as T;
-}
+export function json(value: unknown): string { return JSON.stringify(value ?? {}); }
+export function parseJson<T>(value: unknown, fallback: T): T { if (value == null) return fallback; if (typeof value === 'string') return JSON.parse(value) as T; return value as T; }
