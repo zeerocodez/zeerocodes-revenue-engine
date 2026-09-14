@@ -1,4 +1,3 @@
-import { qualifyLead } from '../domain/qualification';
 import { evaluateClientPolicy, type ClientQualificationPolicy } from '../domain/client-policy';
 import { decideConversation, type ConversationDecision } from '../domain/conversation-decision-engine';
 import { canTransition, transitionLead, type LeadState } from '../domain/lead-state';
@@ -69,7 +68,7 @@ export class QualificationOrchestrator {
       score: score.score,
       intent: conversationDecision.action === 'handoff-closer' ? 'booking' : conversationDecision.action === 'escalate-sdr' ? 'human_request' : 'qualification',
       urgencyDays: lead.profile.urgencyDays,
-      estimatedDealValue: lead.commercial?.estimatedDealValue,
+      estimatedDealValue: lead.commercial?.estimatedDealValue ?? undefined,
       temperature: score.band,
     });
     lead.decision = { action: conversationDecision.action === 'handoff-closer' ? 'closer-handoff' : conversationDecision.action === 'escalate-sdr' || conversationDecision.action === 'escalate-complaint' ? 'sdr-follow-up' : conversationDecision.action === 'opt-out' ? 'reject' : 'ai-follow-up', route: conversationDecision.owner === 'closer' ? 'closer' : conversationDecision.owner === 'sdr' ? 'sdr' : 'ai-follow-up', reason: conversationDecision.reason, priority };
