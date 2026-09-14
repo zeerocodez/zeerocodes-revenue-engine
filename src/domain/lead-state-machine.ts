@@ -110,8 +110,16 @@ export function evaluateLeadTransition(context: LeadTransitionContext): LeadTran
     case 'nurture':
       return decision(
         context,
-        context.outcome === 'no_show' || context.outcome === 'cancelled' || context.from === 'contacting' || context.from === 'engaged' || context.from === 'qualifying' || context.from === 'qualified' || context.from === 'booked' || context.from === 'lost',
-        'nurture requires a recoverable lead condition',
+        context.outcome === 'no_show' ||
+          context.outcome === 'cancelled' ||
+          context.from === 'new' ||
+          context.from === 'contacting' ||
+          context.from === 'engaged' ||
+          context.from === 'qualifying' ||
+          context.from === 'qualified' ||
+          context.from === 'booked' ||
+          context.from === 'lost',
+        'lead can be nurtured and reactivated later',
         'nurture',
       );
     default:
