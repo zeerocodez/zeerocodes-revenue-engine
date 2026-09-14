@@ -14,7 +14,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --legacy-peer-deps
-      - run: npm test
-      - run: npm run lint
-      - run: npm run build
+      - id: install
+        run: npm install --legacy-peer-deps
+      - name: Run tests
+        run: npm test
+      - name: Run lint
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: npm run lint
+      - name: Run build
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: npm run build
