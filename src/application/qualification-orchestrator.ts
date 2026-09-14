@@ -64,11 +64,12 @@ export class QualificationOrchestrator {
     const targetState = desiredState(lead, conversationDecision);
     const stateChanged = canTransition(previousState, targetState) && previousState !== targetState;
     if (stateChanged) lead.state = transitionLead(previousState, targetState);
+    const estimatedDealValue = lead.commercial?.estimatedDealValue ?? undefined;
     const priority = calculateRevenuePriority({
       score: score.score,
       intent: conversationDecision.action === 'handoff-closer' ? 'booking' : conversationDecision.action === 'escalate-sdr' ? 'human_request' : 'qualification',
       urgencyDays: lead.profile.urgencyDays,
-      estimatedDealValue: lead.commercial?.estimatedDealValue ?? undefined,
+      estimatedDealValue,
       temperature: score.band,
     });
     lead.decision = { action: conversationDecision.action === 'handoff-closer' ? 'closer-handoff' : conversationDecision.action === 'escalate-sdr' || conversationDecision.action === 'escalate-complaint' ? 'sdr-follow-up' : conversationDecision.action === 'opt-out' ? 'reject' : 'ai-follow-up', route: conversationDecision.owner === 'closer' ? 'closer' : conversationDecision.owner === 'sdr' ? 'sdr' : 'ai-follow-up', reason: conversationDecision.reason, priority };
