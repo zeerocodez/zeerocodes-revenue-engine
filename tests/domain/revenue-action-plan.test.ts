@@ -9,7 +9,10 @@ const decision = (action: DecisionResult['action'], route: DecisionResult['route
   priority: {
     score: priority,
     band: priority >= 80 ? 'high' : 'medium',
-    reasons: ['test'],
+    reason: ['test'],
+    intentMultiplier: 1,
+    urgencyMultiplier: 1,
+    valueMultiplier: 1,
   },
 });
 
@@ -56,6 +59,7 @@ describe('revenue action plan', () => {
       decision: decision('ai-follow-up', 'ai-follow-up', 40),
       score: 40,
       intent: 'information',
+      hasInboundMessage: false,
     });
 
     expect(plan.nextAction).toBe('send-ai-response');
