@@ -72,10 +72,6 @@ export class LeadLifecycleService {
       lastStateTransition: stateHistoryMetadata(context, decision),
     };
 
-    if (input.appointmentStatus === 'scheduled' || input.appointmentStatus === 'confirmed') {
-      lead.outcome = { ...lead.outcome };
-      lead.outcome.appointmentId = lead.outcome.appointmentId;
-    }
     if (input.outcome === 'won') lead.outcome = { ...lead.outcome, wonAt: now };
     if (input.outcome === 'lost' || input.outcome === 'no_sale' || input.outcome === 'unqualified') {
       lead.outcome = { ...lead.outcome, lostAt: now, lostReason: input.outcome };
