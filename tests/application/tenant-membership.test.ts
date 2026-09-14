@@ -9,9 +9,9 @@ describe('TenantMembershipService', () => {
     const repository = new MemoryTenantMembershipRepository();
     repository.seedTenant({ id: 'tenant-a', name: 'A', slug: 'a', status: 'active', createdAt: now });
     repository.seedTenant({ id: 'tenant-b', name: 'B', slug: 'b', status: 'active', createdAt: now });
-    repository.seedMembership({ id: 'user-1', tenantId: 'tenant-a', email: 'user@example.com', role: 'viewer', active: true, createdAt: now });
-    repository.seedMembership({ id: 'admin-1', tenantId: 'tenant-a', email: 'admin@example.com', role: 'admin', active: true, createdAt: now });
-    repository.seedMembership({ id: 'inactive-1', tenantId: 'tenant-a', email: 'inactive@example.com', role: 'owner', active: false, createdAt: now });
+    repository.seedMembership({ id: 'user-1', userId: 'user-1', tenantId: 'tenant-a', email: 'user@example.com', role: 'viewer', active: true, createdAt: now });
+    repository.seedMembership({ id: 'admin-1', userId: 'admin-1', tenantId: 'tenant-a', email: 'admin@example.com', role: 'admin', active: true, createdAt: now });
+    repository.seedMembership({ id: 'inactive-1', userId: 'inactive-1', tenantId: 'tenant-a', email: 'inactive@example.com', role: 'owner', active: false, createdAt: now });
     return new TenantMembershipService(repository);
   }
 
@@ -35,7 +35,7 @@ describe('TenantMembershipService', () => {
   it('rejects suspended tenants before membership is evaluated', async () => {
     const repository = new MemoryTenantMembershipRepository();
     repository.seedTenant({ id: 'tenant-s', name: 'Suspended', slug: 'suspended', status: 'suspended', createdAt: now });
-    repository.seedMembership({ id: 'owner-1', tenantId: 'tenant-s', email: 'owner@example.com', role: 'owner', active: true, createdAt: now });
+    repository.seedMembership({ id: 'owner-1', userId: 'owner-1', tenantId: 'tenant-s', email: 'owner@example.com', role: 'owner', active: true, createdAt: now });
     const service = new TenantMembershipService(repository);
     await expect(service.authenticate('owner-1', 'tenant-s')).rejects.toThrow('Tenant is suspended');
   });
