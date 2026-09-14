@@ -16,7 +16,7 @@ export interface LeadLifecycleStore {
   save(lead: LeadRecord): Promise<void>;
 }
 
-export interface LeadLifecycleTransitionInput extends Omit<LeadTransitionContext, 'from' | 'to'> {
+export interface LeadLifecycleTransitionInput extends Omit<LeadTransitionContext, 'to'> {
   leadId: string;
   organizationId: string;
   to: LeadState;
