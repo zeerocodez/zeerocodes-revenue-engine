@@ -82,12 +82,16 @@ export function belongsToOrganization(lead: LeadRecord, organizationId: string):
   return lead.organizationId === organizationId;
 }
 
+function createLeadId(): string {
+  return `lead_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function createLead(input: LeadIntakeInput, now = new Date().toISOString()): LeadRecord {
   if (!input.organizationId.trim()) throw new Error('organizationId is required');
   if (!input.name.trim()) throw new Error('name is required');
 
   return {
-    id: crypto.randomUUID(),
+    id: createLeadId(),
     organizationId: input.organizationId,
     name: input.name.trim(),
     email: input.email?.trim() || undefined,
