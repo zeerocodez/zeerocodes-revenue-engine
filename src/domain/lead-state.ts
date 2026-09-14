@@ -14,7 +14,7 @@ export const LEAD_STATES = [
 export type LeadState = typeof LEAD_STATES[number];
 
 const transitions: Record<LeadState, readonly LeadState[]> = {
-  new: ['contacting', 'invalid'],
+  new: ['contacting', 'nurture', 'invalid'],
   contacting: ['engaged', 'nurture', 'invalid'],
   engaged: ['qualifying', 'nurture', 'lost'],
   qualifying: ['qualified', 'nurture', 'lost'],
