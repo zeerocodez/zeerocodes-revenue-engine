@@ -1,11 +1,13 @@
-import type { LeadRecord } from '../domain/lead';
-import type { QualificationProfile } from '../domain/qualification';
+import { qualifyLead } from '../domain/qualification';
 import { evaluateClientPolicy, type ClientQualificationPolicy } from '../domain/client-policy';
 import { decideConversation, type ConversationDecision } from '../domain/conversation-decision-engine';
 import { canTransition, transitionLead, type LeadState } from '../domain/lead-state';
 import { scoreLead } from '../domain/scoring';
+import { calculateRevenuePriority } from '../domain/revenue-priority';
 import { getNextQualificationQuestion, type QualificationField, type QualificationProgress, getQualificationProgress } from '../domain/qualification-question-engine';
+import type { QualificationProfile } from '../domain/qualification';
 import type { ClientConfiguration } from '../domain/client-configuration';
+import type { LeadRecord } from '../domain/lead';
 import type { LeadStore } from './revenue-engine-service';
 import type { LeadEventStore } from '../domain/lead-events';
 
@@ -63,12 +65,19 @@ export class QualificationOrchestrator {
     const targetState = desiredState(lead, conversationDecision);
     const stateChanged = canTransition(previousState, targetState) && previousState !== targetState;
     if (stateChanged) lead.state = transitionLead(previousState, targetState);
-    lead.decision = { action: conversationDecision.action === 'handoff-closer' ? 'closer-handoff' : conversationDecision.action === 'escalate-sdr' || conversationDecision.action === 'escalate-complaint' ? 'sdr-follow-up' : conversationDecision.action === 'opt-out' ? 'reject' : 'ai-follow-up', route: conversationDecision.owner === 'closer' ? 'closer' : conversationDecision.owner === 'sdr' ? 'sdr' : 'ai-follow-up', reason: conversationDecision.reason };
+    const priority = calculateRevenuePriority({
+      score: score.score,
+      intent: conversationDecision.action === 'handoff-closer' ? 'booking' : conversationDecision.action === 'escalate-sdr' ? 'human_request' : 'qualification',
+      urgencyDays: lead.profile.urgencyDays,
+      estimatedDealValue: lead.commercial?.estimatedDealValue,
+      temperature: score.band,
+    });
+    lead.decision = { action: conversationDecision.action === 'handoff-closer' ? 'closer-handoff' : conversationDecision.action === 'escalate-sdr' || conversationDecision.action === 'escalate-complaint' ? 'sdr-follow-up' : conversationDecision.action === 'opt-out' ? 'reject' : 'ai-follow-up', route: conversationDecision.owner === 'closer' ? 'closer' : conversationDecision.owner === 'sdr' ? 'sdr' : 'ai-follow-up', reason: conversationDecision.reason, priority };
     lead.metadata = { ...lead.metadata, qualificationAsked: asked, lastConversationDecision: conversationDecision, configurationVersion: input.configuration?.version };
     lead.updatedAt = new Date().toISOString();
     await this.leads.save(lead);
 
-    await this.events?.append({ id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, leadId: lead.id, organizationId: lead.organizationId, type: 'lead.scored', actor: 'system', timestamp: new Date().toISOString(), fromState: previousState, toState: lead.state, reason: conversationDecision.reason, metadata: { extractedFields, score: score.score, qualified: policyResult.qualified, nextQuestion: nextQuestion?.id, configurationVersion: input.configuration?.version } });
+    await this.events?.append({ id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, leadId: lead.id, organizationId: lead.organizationId, type: 'lead.scored', actor: 'system', timestamp: new Date().toISOString(), fromState: previousState, toState: lead.state, reason: conversationDecision.reason, metadata: { extractedFields, score: score.score, qualified: policyResult.qualified, priority, nextQuestion: nextQuestion?.id, configurationVersion: input.configuration?.version } });
     if (stateChanged) await this.events?.append({ id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, leadId: lead.id, organizationId: lead.organizationId, type: 'lead.state_changed', actor: 'system', timestamp: new Date().toISOString(), fromState: previousState, toState: lead.state, reason: conversationDecision.reason });
     return { lead, conversationDecision, progress, nextQuestion: nextQuestion?.prompt, extractedFields, stateChanged };
   }
