@@ -51,12 +51,18 @@ export function determineNextBestAction(context: NextBestActionContext): NextBes
     };
   }
 
-  if (context.decision.action === 'closer-handoff') {
+  // A critical revenue opportunity keeps the closer priority. A normal closer handoff
+  // that has already breached the response SLA first triggers SDR recovery.
+  if (context.priority.band === 'critical') {
     return { action: 'closer-call-now', urgency: 'immediate', reason: context.decision.reason, slaBreached };
   }
 
-  if (context.priority.band === 'critical' || slaBreached) {
-    return { action: 'sdr-call-now', urgency: 'immediate', reason: slaBreached ? 'response SLA breached' : 'critical revenue priority', slaBreached };
+  if (slaBreached) {
+    return { action: 'sdr-call-now', urgency: 'immediate', reason: 'response SLA breached', slaBreached };
+  }
+
+  if (context.decision.action === 'closer-handoff') {
+    return { action: 'closer-call-now', urgency: 'immediate', reason: context.decision.reason, slaBreached };
   }
 
   if (context.decision.action === 'sdr-follow-up') {
