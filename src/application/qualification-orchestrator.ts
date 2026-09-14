@@ -65,10 +65,11 @@ export class QualificationOrchestrator {
     const stateChanged = canTransition(previousState, targetState) && previousState !== targetState;
     if (stateChanged) lead.state = transitionLead(previousState, targetState);
     const estimatedDealValue = lead.commercial?.estimatedDealValue ?? undefined;
+    const urgencyDays = lead.profile.urgencyDays ?? undefined;
     const priority = calculateRevenuePriority({
       score: score.score,
       intent: conversationDecision.action === 'handoff-closer' ? 'booking' : conversationDecision.action === 'escalate-sdr' ? 'human_request' : 'qualification',
-      urgencyDays: lead.profile.urgencyDays,
+      urgencyDays,
       estimatedDealValue,
       temperature: score.band,
     });
