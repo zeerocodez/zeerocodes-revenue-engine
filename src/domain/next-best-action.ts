@@ -51,14 +51,15 @@ export function determineNextBestAction(context: NextBestActionContext): NextBes
     };
   }
 
-  // A critical revenue opportunity keeps the closer priority. A normal closer handoff
-  // that has already breached the response SLA first triggers SDR recovery.
-  if (context.priority.band === 'critical') {
-    return { action: 'closer-call-now', urgency: 'immediate', reason: context.decision.reason, slaBreached };
-  }
-
+  // Response SLA is an operational safety net: recover an unattended lead before
+  // applying normal priority routing. Critical leads without an SLA breach still
+  // go directly to the closer.
   if (slaBreached) {
     return { action: 'sdr-call-now', urgency: 'immediate', reason: 'response SLA breached', slaBreached };
+  }
+
+  if (context.priority.band === 'critical') {
+    return { action: 'closer-call-now', urgency: 'immediate', reason: context.decision.reason, slaBreached };
   }
 
   if (context.decision.action === 'closer-handoff') {
