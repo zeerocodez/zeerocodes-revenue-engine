@@ -1,27 +1,22 @@
-import type { LeadEventStore, LeadStore } from './revenue-engine-service';
-import { RevenueRecordingService } from './revenue-recording-service';
 import { RevenueRecoveryService } from './revenue-recovery-service';
 import { SdrDispositionService } from './sdr-disposition-service';
-import { SdrQueueService } from './sdr-queue-service';
-import type { SdrWorkItem } from '../domain/sdr-work-item';
+import { SdrQueueService, type SdrWorkItemStore } from './sdr-queue-service';
+import { RevenueRecordingService, type RevenueRecordingStore } from './revenue-recording-service';
+import { LeadLifecycleService } from './lead-lifecycle-service';
+import type { LeadEventStore, LeadStore } from './revenue-engine-service';
 
-/**
- * Composition boundary for the revenue recovery loop. Persistence adapters
- * remain behind the existing application services; the HTTP layer only needs
- * this factory and never reaches into stores directly.
- */
-export function createRevenueRecoveryService(
-  workItems: SdrWorkItem[],
-  leadStore: LeadStore,
-  leadEventStore: LeadEventStore,
-): RevenueRecoveryService {
-  const queue = new SdrQueueService(workItems);
-  const lifecycle = new (require('./lead-lifecycle-service').LeadLifecycleService)(leadStore, leadEventStore);
+export interface RevenueRecoveryDependencies {
+  workItems: SdrWorkItemStore;
+  leadStore: LeadStore;
+  leadEventStore: LeadEventStore;
+  revenueStore: RevenueRecordingStore;
+}
+
+/** Composition boundary for the production recovery loop. */
+export function createRevenueRecoveryService(dependencies: RevenueRecoveryDependencies): RevenueRecoveryService {
+  const queue = new SdrQueueService(dependencies.workItems);
+  const lifecycle = new LeadLifecycleService(dependencies.leadStore, dependencies.leadEventStore);
   const disposition = new SdrDispositionService(lifecycle);
-  const revenueStore = {
-    async getById() { return null; },
-    async getByIdempotencyKey() { return null; },
-    async save() {},
-  };
-  return new RevenueRecoveryService(queue, disposition, new RevenueRecordingService(revenueStore));
+  const revenue = new RevenueRecordingService(dependencies.revenueStore);
+  return new RevenueRecoveryService(queue, disposition, revenue);
 }
