@@ -5,6 +5,7 @@ const base = {
   organizationId: 'org_1', leadId: 'lead_1', leadName: 'Ada', leadState: 'qualified' as const,
   priorityScore: 91, priorityBand: 'critical' as const, nextAction: 'closer-call-now' as const,
   reason: 'ready to buy', now: '2026-09-14T10:00:00.000Z', intent: 'purchase' as const,
+  slaBreached: false,
 };
 
 describe('SDR work item', () => {
