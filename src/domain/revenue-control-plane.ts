@@ -1,13 +1,15 @@
 import type { RevenueIntelligenceResult } from '../application/revenue-intelligence-service';
 import type { SdrPerformanceResult } from '../application/sdr-performance-service';
 import type { SdrWorkItem } from './sdr-work-item';
+import type { RevenueLeakageOpportunity } from './revenue-leakage';
 
 export type ControlActionType =
   | 'critical-opportunity'
   | 'sla-breach'
   | 'manager-escalation'
   | 'pipeline-leakage'
-  | 'underperforming-owner';
+  | 'underperforming-owner'
+  | 'revenue-leak';
 
 export type ControlSeverity = 'critical' | 'high' | 'medium';
 
@@ -30,6 +32,7 @@ export interface RevenueControlPlaneInput {
   workItems: SdrWorkItem[];
   performance: SdrPerformanceResult[];
   managerEscalationCount?: number;
+  leakageOpportunities?: RevenueLeakageOpportunity[];
   now?: string;
 }
 
@@ -42,6 +45,8 @@ export interface RevenueControlPlaneSnapshot {
   criticalOpenWorkItems: number;
   slaBreaches: number;
   openManagerEscalations: number;
+  estimatedRecoverableRevenue: number;
+  revenueLeakCount: number;
   atRiskOwners: string[];
   actions: RevenueControlAction[];
   status: 'clear' | 'watch' | 'intervene';
@@ -81,6 +86,7 @@ export function buildRevenueControlPlane(input: RevenueControlPlaneInput): Reven
   const now = input.now ?? new Date().toISOString();
   const actions: RevenueControlAction[] = [];
   const scopedItems = input.workItems.filter((item) => item.organizationId === input.organizationId);
+  const leakage = (input.leakageOpportunities ?? []).filter((item) => item.organizationId === input.organizationId);
 
   for (const item of scopedItems) {
     if (item.status === 'completed' || item.status === 'cancelled') continue;
@@ -90,6 +96,10 @@ export function buildRevenueControlPlane(input: RevenueControlPlaneInput): Reven
     if (item.slaBreached) {
       actions.push(action(input.organizationId, 'sla-breach', item.priorityBand === 'critical' ? 'critical' : 'high', `SLA breach: ${item.leadName}`, 'The lead response deadline has been missed.', 'Recover the lead immediately and record the outcome.', now, item.leadId, item.ownerId, item.id));
     }
+  }
+
+  for (const leak of leakage) {
+    actions.push(action(input.organizationId, 'revenue-leak', leak.severity, `Revenue leak: ${leak.leadId}`, leak.reason, leak.recommendedAction, now, leak.leadId));
   }
 
   if (input.managerEscalationCount && input.managerEscalationCount > 0) {
@@ -109,7 +119,23 @@ export function buildRevenueControlPlane(input: RevenueControlPlaneInput): Reven
   actions.sort((a, b) => severityRank[b.severity] - severityRank[a.severity]);
   const criticalOpenWorkItems = scopedItems.filter((item) => item.status !== 'completed' && item.status !== 'cancelled' && item.priorityBand === 'critical').length;
   const slaBreaches = scopedItems.filter((item) => item.status !== 'completed' && item.status !== 'cancelled' && item.slaBreached).length;
+  const estimatedRecoverableRevenue = leakage.reduce((sum, item) => sum + item.estimatedRecoverableRevenue, 0);
   const status: RevenueControlPlaneSnapshot['status'] = actions.some((item) => item.severity === 'critical') ? 'intervene' : actions.length > 0 ? 'watch' : 'clear';
 
-  return { organizationId: input.organizationId, currency: input.intelligence.funnel.currency, revenue: input.intelligence.funnel.revenue, revenueRecovered: input.intelligence.revenueRecovered, revenuePerLead: input.intelligence.revenuePerLead, criticalOpenWorkItems, slaBreaches, openManagerEscalations: input.managerEscalationCount ?? 0, atRiskOwners, actions, status, generatedAt: now };
+  return {
+    organizationId: input.organizationId,
+    currency: input.intelligence.funnel.currency,
+    revenue: input.intelligence.funnel.revenue,
+    revenueRecovered: input.intelligence.revenueRecovered,
+    revenuePerLead: input.intelligence.revenuePerLead,
+    criticalOpenWorkItems,
+    slaBreaches,
+    openManagerEscalations: input.managerEscalationCount ?? 0,
+    estimatedRecoverableRevenue,
+    revenueLeakCount: leakage.length,
+    atRiskOwners,
+    actions,
+    status,
+    generatedAt: now,
+  };
 }
