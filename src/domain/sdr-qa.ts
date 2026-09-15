@@ -12,6 +12,7 @@ export interface SdrQaReview {
   organizationId: string;
   leadId: string;
   workItemId: string;
+  ownerId?: string;
   reviewerId?: string;
   scores: SdrQaScore;
   total: number;
