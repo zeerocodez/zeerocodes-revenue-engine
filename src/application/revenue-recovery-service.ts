@@ -36,7 +36,7 @@ export interface RevenueRecoveryResult {
 
 export interface RevenueRecoveryTransaction { run<T>(work: () => Promise<T>): Promise<T>; }
 
-/** Closes the recovery loop: lifecycle -> revenue -> attribution -> work-item completion. */
+/** Closes the recovery loop and safely replays duplicate WON requests. */
 export class RevenueRecoveryService {
   constructor(
     private readonly queue: SdrQueueService,
@@ -56,6 +56,9 @@ export class RevenueRecoveryService {
     if (!input.ownerId) throw new Error('ownerId is required');
 
     const revenueAmount = Math.max(0, Math.round(input.outcomeRevenue ?? 0));
+    const recoveryId = `recovery_attr_${input.workItemId}_won`;
+    const revenueKey = `recovery:${input.workItemId}:won`;
+
     if (input.disposition === 'won') {
       if (revenueAmount <= 0) throw new Error('won recovery requires outcomeRevenue');
       if (!input.currency) throw new Error('won recovery requires currency');
@@ -63,6 +66,26 @@ export class RevenueRecoveryService {
       if (!input.leakageOpportunityId) throw new Error('won recovery requires leakageOpportunityId');
       if (!input.leakageType) throw new Error('won recovery requires leakageType');
       if (!Number.isFinite(input.leakageValue) || (input.leakageValue ?? 0) < 0) throw new Error('won recovery requires leakageValue');
+
+      const existingRevenue = await this.revenueRecordingService.getByIdempotencyKey(input.organizationId, revenueKey);
+      const existingAttribution = await this.attributionStore.getById(input.organizationId, recoveryId);
+      const existingItem = await this.queue.get(input.organizationId, input.workItemId);
+
+      if (existingRevenue && existingAttribution && existingItem?.status === 'completed') {
+        if (existingItem.ownerId !== input.ownerId || existingAttribution.ownerId !== input.ownerId) {
+          throw new Error('Recovery retry owner mismatch');
+        }
+        return {
+          workItem: existingItem,
+          disposition: 'won',
+          lifecycleState: 'won',
+          transitioned: false,
+          revenueRecorded: true,
+          revenueAmount: Number(existingRevenue.amount),
+          duplicateRevenue: true,
+          recoveryAttributed: true,
+        };
+      }
     }
 
     const snapshot = await this.queue.queue(input.organizationId, input.now);
@@ -94,25 +117,33 @@ export class RevenueRecoveryService {
       const recording = await this.revenueRecordingService.record({
         id: `rev_${current.id}_won`, organizationId: input.organizationId, leadId: current.leadId,
         attributionType: 'recovered', amount: revenueAmount, currency: input.currency!, ownerId: input.ownerId,
-        recordedAt: input.now, evidence: 'won-outcome', idempotencyKey: `recovery:${current.id}:won`,
+        recordedAt: input.now, evidence: 'won-outcome', idempotencyKey: revenueKey,
       });
       revenueRecorded = true;
       duplicateRevenue = recording.duplicate;
 
       const attribution = createRevenueRecoveryAttribution({
-        id: `recovery_attr_${current.id}_won`, organizationId: input.organizationId, leadId: current.leadId,
+        id: recoveryId, organizationId: input.organizationId, leadId: current.leadId,
         leakageOpportunityId: input.leakageOpportunityId!, leakageType: input.leakageType!, ownerId: input.ownerId,
         recoveredAmount: revenueAmount, currency: input.currency!, leakageValue: input.leakageValue!,
         recoveredAt: input.now ?? new Date().toISOString(), recoverySource: input.recoverySource ?? 'sdr', evidence: 'won-outcome',
       });
-      await this.attributionStore.save(attribution);
+      await this.attributionStore!.save(attribution);
       recoveryAttributed = true;
     }
 
     const completed = await this.queue.complete(input.organizationId, current.id, input.disposition, {
       ownerId: input.ownerId, outcomeRevenue: revenueAmount || undefined,
     });
-    return { workItem: completed, disposition: input.disposition, lifecycleState: lifecycle.state, transitioned: lifecycle.transitioned,
-      revenueRecorded, revenueAmount, duplicateRevenue, recoveryAttributed };
+    return {
+      workItem: completed,
+      disposition: input.disposition,
+      lifecycleState: lifecycle.state,
+      transitioned: lifecycle.transitioned,
+      revenueRecorded,
+      revenueAmount,
+      duplicateRevenue,
+      recoveryAttributed,
+    };
   }
 }
