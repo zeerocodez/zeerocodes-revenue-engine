@@ -2,7 +2,7 @@ import type { SdrWorkItem } from '../domain/sdr-work-item';
 
 export interface SdrPerformanceInput {
   ownerId: string;
-  items: Array<SdrWorkItem & { completedAt?: string; outcomeRevenue?: number }>;
+  items: SdrWorkItem[];
 }
 
 export interface SdrPerformanceResult {
@@ -25,13 +25,17 @@ function rate(numerator: number, denominator: number): number {
   return Math.round((numerator / denominator) * 10000) / 100;
 }
 
-/** Produces manager-facing SDR performance metrics from completed work items. */
+/** Produces manager-facing SDR performance metrics from assigned work items. */
 export class SdrPerformanceService {
   calculate(input: SdrPerformanceInput): SdrPerformanceResult {
-    const owned = input.items.filter((item) => item.assignedTo === input.ownerId);
-    const completed = owned.filter((item) => Boolean(item.completedAt));
-    const qualified = completed.filter((item) => item.disposition === 'qualified' || item.disposition === 'appointment-booked' || item.disposition === 'won');
-    const booked = completed.filter((item) => item.disposition === 'appointment-booked' || item.disposition === 'won');
+    const owned = input.items.filter((item) => item.ownerId === input.ownerId);
+    const completed = owned.filter((item) => item.status === 'completed');
+    const qualified = completed.filter(
+      (item) => item.disposition === 'qualified' || item.disposition === 'appointment-booked' || item.disposition === 'won',
+    );
+    const booked = completed.filter(
+      (item) => item.disposition === 'appointment-booked' || item.disposition === 'won',
+    );
     const wins = completed.filter((item) => item.disposition === 'won');
     const breaches = owned.filter((item) => item.slaBreached).length;
 
