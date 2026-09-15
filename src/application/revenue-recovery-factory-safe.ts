@@ -1,10 +1,3 @@
-import type { SdrWorkItem } from '../domain/sdr-work-item';
-
-/** Persistence-neutral dependency contract for future server composition. */
-export interface RevenueRecoveryDependencies {
-  workItems: SdrWorkItem[];
-}
-
-export function createRevenueRecoveryDependencies(workItems: SdrWorkItem[]): RevenueRecoveryDependencies {
-  return { workItems };
-}
+// Retained as a compatibility placeholder for the earlier composition experiment.
+// Production composition lives in revenue-recovery-factory.ts.
+export {};
