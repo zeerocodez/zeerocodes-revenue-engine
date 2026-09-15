@@ -3,7 +3,7 @@ import type { RevenueActionPlan } from './revenue-action-plan';
 import type { LeadIntent } from './lead';
 
 export type SdrWorkAction = 'call-now' | 'call-today' | 'follow-up' | 'recover-sla' | 'handoff-closer' | 'review';
-export type SdrDisposition = 'connected' | 'no-answer' | 'callback-requested' | 'qualified' | 'appointment-booked' | 'not-qualified' | 'lost' | 'nurture' | 'wrong-number' | 'do-not-contact';
+export type SdrDisposition = 'connected' | 'no-answer' | 'callback-requested' | 'qualified' | 'appointment-booked' | 'won' | 'not-qualified' | 'lost' | 'nurture' | 'wrong-number' | 'do-not-contact';
 
 export interface SdrScriptPack {
   opening: string;
@@ -59,7 +59,7 @@ const BASE_QUESTIONS = [
 ];
 
 const DISPOSITIONS: SdrDisposition[] = [
-  'connected', 'no-answer', 'callback-requested', 'qualified', 'appointment-booked',
+  'connected', 'no-answer', 'callback-requested', 'qualified', 'appointment-booked', 'won',
   'not-qualified', 'lost', 'nurture', 'wrong-number', 'do-not-contact',
 ];
 
