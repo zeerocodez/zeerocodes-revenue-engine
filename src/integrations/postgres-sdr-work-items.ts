@@ -1,4 +1,5 @@
-import type { SdrWorkItem, SdrWorkItemStore } from '../application/sdr-queue-service';
+import type { SdrWorkItem } from '../domain/sdr-work-item';
+import type { SdrWorkItemStore } from '../application/sdr-queue-service';
 import { json, parseJson, type PostgresDatabase } from './postgres';
 
 interface SdrWorkItemRow {
