@@ -22,6 +22,18 @@ export class PostgresSdrWorkItemStore implements SdrWorkItemStore {
     return result.rows.map((row) => parseJson<SdrWorkItem>(row.payload, {} as SdrWorkItem));
   }
 
+  async claim(organizationId: string, itemId: string, ownerId: string): Promise<SdrWorkItem | null> {
+    const result = await this.db.query<SdrWorkItemRow>(
+      `update sdr_work_items
+       set status = 'claimed', owner_id = $3,
+           payload = jsonb_set(jsonb_set(payload, '{status}', '"claimed"'::jsonb), '{ownerId}', to_jsonb($3::text))
+       where organization_id = $1 and id = $2 and status = 'open'
+       returning payload`,
+      [organizationId, itemId, ownerId],
+    );
+    return result.rows[0] ? parseJson<SdrWorkItem>(result.rows[0].payload, {} as SdrWorkItem) : null;
+  }
+
   async save(item: SdrWorkItem): Promise<void> {
     await this.db.query(
       `insert into sdr_work_items (id, organization_id, lead_id, owner_id, status, priority_band, priority_score, deadline_at, payload, created_at, completed_at)
