@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { PostgresRevenueControlPlaneReader } from '../../src/integrations/postgres-control-plane';
 
 describe('PostgresRevenueControlPlaneReader ROI metrics', () => {
-  it('reads recovered revenue from recovery attribution and uses one activity row per lead', async () => {
+  it('reads recovered revenue, calculates recovery ROI, and uses one activity row per lead', async () => {
     const queries: string[] = [];
     const db = {
       async query<T = unknown>(sql: string): Promise<{ rows: T[] }> {
@@ -22,6 +22,9 @@ describe('PostgresRevenueControlPlaneReader ROI metrics', () => {
 
     expect(snapshot.revenueRecovered).toBe(500000);
     expect(snapshot.estimatedRecoverableRevenue).toBe(2000000);
+    expect(snapshot.unrecoveredRevenue).toBe(1500000);
+    expect(snapshot.recoveryRate).toBe(25);
+    expect(snapshot.leakageRate).toBe(50);
     expect(snapshot.revenueLeakCount).toBe(1);
     expect(queries.some((sql) => sql.includes('left join lateral'))).toBe(true);
   });
