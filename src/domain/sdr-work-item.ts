@@ -30,7 +30,7 @@ export interface SdrWorkItem {
   slaMinutes: number;
   slaBreached: boolean;
   script: SdrScriptPack;
-  dispositionOptions: SdrDisposition[];
+  dispositionOptions: readonly SdrDisposition[];
   ownerId?: string;
   createdAt: string;
   completedAt?: string;
