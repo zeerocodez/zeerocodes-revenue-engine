@@ -4,11 +4,10 @@ import type { LeadRecord } from '../../src/domain/lead';
 import type { ClientQualificationPolicy } from '../../src/domain/client-policy';
 
 const policy: ClientQualificationPolicy = {
-  threshold: 0,
-  weights: { serviceFit: 25, needConfirmed: 20, decisionMaker: 20, locationFit: 15, urgency: 10, budget: 10 },
-  maxUrgencyDays: 14,
+  qualificationThreshold: 70,
   requireDecisionMaker: false,
-  requireBudget: false,
+  requireServiceFit: true,
+  requireLocationFit: false,
 };
 
 function lead(): LeadRecord {
@@ -25,12 +24,12 @@ describe('qualification orchestrator lifecycle integrity', () => {
     const stored = lead();
     const service = new QualificationOrchestrator({
       get: async () => stored,
-      save: async (next) => Object.assign(stored, next),
+      save: async (next) => { Object.assign(stored, next); },
     });
 
     const result = await service.process({
       leadId: 'lead_1', organizationId: 'org_1',
-      text: 'Yes, I am the owner and I want to move forward now. My budget is ₦200,000.',
+      text: 'Yes, I am the owner. I want to book an appointment now. My budget is ₦200,000.',
       policy,
     });
 
