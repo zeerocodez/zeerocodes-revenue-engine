@@ -3,7 +3,8 @@ import { SdrDispositionService } from './sdr-disposition-service';
 import { SdrQueueService, type SdrWorkItemStore } from './sdr-queue-service';
 import { RevenueRecordingService, type RevenueRecordingStore } from './revenue-recording-service';
 import { LeadLifecycleService } from './lead-lifecycle-service';
-import type { LeadEventStore, LeadStore } from './revenue-engine-service';
+import type { LeadEventStore } from '../domain/lead-events';
+import type { LeadStore } from './revenue-engine-service';
 
 export interface RevenueRecoveryDependencies {
   workItems: SdrWorkItemStore;
