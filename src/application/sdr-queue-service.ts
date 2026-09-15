@@ -3,6 +3,8 @@ import { createSdrWorkItem, type SdrWorkItem, type SdrWorkItemInput } from '../d
 export interface SdrWorkItemStore {
   list(organizationId: string): Promise<SdrWorkItem[]>;
   save(item: SdrWorkItem): Promise<void>;
+  /** Optional atomic claim primitive used by production persistence adapters. */
+  claim?(organizationId: string, itemId: string, ownerId: string): Promise<SdrWorkItem | null>;
 }
 
 export interface SdrQueueSnapshot {
@@ -47,6 +49,12 @@ export class SdrQueueService {
   }
 
   async claim(organizationId: string, itemId: string, ownerId: string): Promise<SdrWorkItem> {
+    if (this.store.claim) {
+      const claimed = await this.store.claim(organizationId, itemId, ownerId);
+      if (!claimed) throw new Error('SDR work item is not open');
+      return claimed;
+    }
+
     const items = await this.store.list(organizationId);
     const item = items.find((candidate) => candidate.id === itemId);
     if (!item) throw new Error('SDR work item not found');
