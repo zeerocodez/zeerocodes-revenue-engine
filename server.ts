@@ -60,7 +60,7 @@ const membershipService=new TenantMembershipService(membershipRepository);
 const headerIdentityResolver=new MembershipIdentityResolver(membershipService);
 const sessionIdentityResolver=new SessionIdentityResolver(membershipService);
 
-if(!usePostgres&&process.env.NODE_ENV!=='production){
+if(!usePostgres&&process.env.NODE_ENV!=='production'){
   const tenantId=process.env.DEV_TENANT_ID||'demo-tenant',userId=process.env.DEV_USER_ID||'demo-user',role=(process.env.DEV_USER_ROLE||'owner') as TenantRole;
   const validRoles:TenantRole[]=['viewer','agent','manager','admin','owner'];if(!validRoles.includes(role))throw new Error('Invalid DEV_USER_ROLE');
   memoryMembershipRepository.seedTenant({id:tenantId,name:'Demo Tenant',slug:'demo-tenant',status:'active',createdAt:new Date().toISOString()});
