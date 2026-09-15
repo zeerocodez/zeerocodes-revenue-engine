@@ -12,6 +12,8 @@ import { SessionIdentityResolver, signSession } from './src/application/session-
 import { TenantLeadEventRepositoryImpl } from './src/application/tenant-repository';
 import { FollowUpWorker, LoggingChannelAdapter } from './src/application/follow-up-worker';
 import { planInitialFollowUps } from './src/application/follow-up-planner';
+import { RevenueRecoveryService } from './src/application/revenue-recovery-service';
+import { handleRevenueRecovery } from './src/application/revenue-recovery-http';
 import { MemoryClientConfigurationStore } from './src/integrations/memory-client-configuration';
 import { MemoryConversationStore, MemoryMessageStore } from './src/integrations/memory-messaging';
 import { MemoryLeadStore } from './src/integrations/memory-lead-store';
@@ -23,6 +25,9 @@ import { PostgresLeadStore, PostgresConversationStore, PostgresMessageStore, Pos
 import { PostgresRevenueWorkflowRepository } from './src/integrations/postgres-workflow';
 import { PostgresFollowUpRepository } from './src/integrations/postgres-follow-up';
 import { PostgresRevenueControlPlaneReader } from './src/integrations/postgres-control-plane';
+import { PostgresSdrWorkItemStore } from './src/integrations/postgres-sdr-work-items';
+import { PostgresRevenueRecordingStore } from './src/integrations/postgres-revenue-recording';
+import { createRevenueRecoveryService } from './src/application/revenue-recovery-factory';
 import { WebhookDispatcher } from './src/integrations/webhooks';
 import { runPostgresMigrations } from './src/integrations/postgres-migrations';
 import { canTransition, transitionLead } from './src/domain/lead-state';
@@ -45,6 +50,7 @@ const clientConfigurationService=new ClientConfigurationService(clientConfigurat
 const workflow=db?new PostgresRevenueWorkflowRepository(db):undefined;
 const followUpRepository=db?new PostgresFollowUpRepository(db):undefined;
 const revenueControlPlaneReader=db?new PostgresRevenueControlPlaneReader(db):undefined;
+const recoveryService:RevenueRecoveryService|undefined=db?createRevenueRecoveryService({workItems:new PostgresSdrWorkItemStore(db),leadStore,leadEventStore,revenueStore:new PostgresRevenueRecordingStore(db)}):undefined;
 const followUpAdapters=new Map<FollowUpChannel, LoggingChannelAdapter>((['whatsapp','sms','email','voice','web'] as const).map((channel)=>[channel,new LoggingChannelAdapter(channel)]));
 const followUpWorker=followUpRepository?new FollowUpWorker(followUpRepository,followUpAdapters):undefined;
 const webhookDispatcher=db?new WebhookDispatcher(db):undefined;
@@ -98,6 +104,7 @@ app.post('/api/leads/:id/outcome',async(req:RequestWithContext,res)=>{try{const 
 app.get('/api/revenue/usage',async(req:RequestWithContext,res)=>{try{const c=contextOf(req);requireRole(c,'manager');if(!workflow)return res.json({usage:[]});return res.json({usage:await workflow.usageSummary(c.tenantId)});}catch(e){return res.status(tenantError(e)).json({error:e instanceof Error?e.message:'Unable to load usage'});}});
 app.get('/api/revenue/control-plane',async(req:RequestWithContext,res)=>{try{const c=contextOf(req);requireRole(c,'manager');if(!revenueControlPlaneReader)return res.status(503).json({error:'Revenue control plane requires PostgreSQL'});return res.json({controlPlane:await revenueControlPlaneReader.calculate(c.tenantId)});}catch(e){return res.status(tenantError(e)).json({error:e instanceof Error?e.message:'Unable to calculate revenue control plane'});}});
 app.get('/api/revenue/control-plane/latest',async(req:RequestWithContext,res)=>{try{const c=contextOf(req);requireRole(c,'manager');if(!revenueControlPlaneReader)return res.json({controlPlane:null});return res.json({controlPlane:await revenueControlPlaneReader.latest(c.tenantId)});}catch(e){return res.status(tenantError(e)).json({error:e instanceof Error?e.message:'Unable to load revenue control plane'});}});
+app.post('/api/revenue/recovery',async(req:RequestWithContext,res)=>{if(!recoveryService)return res.status(503).json({error:'Revenue recovery requires PostgreSQL'});return handleRevenueRecovery(req,res,{recovery:recoveryService,controlPlane:async organizationId=>revenueControlPlaneReader?await revenueControlPlaneReader.calculate(organizationId):null});});
 app.post('/api/webhooks/deliver',async(req:RequestWithContext,res)=>{try{const c=contextOf(req);requireRole(c,'admin');if(!webhookDispatcher)return res.status(503).json({error:'Webhook delivery requires PostgreSQL'});return res.json({delivered:await webhookDispatcher.deliverPending(Number(req.body?.limit||20))});}catch(e){return res.status(tenantError(e)).json({error:e instanceof Error?e.message:'Unable to deliver webhooks'});}});
 
 app.use(express.static(path.join(__dirname,'dist')));

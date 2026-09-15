@@ -23,7 +23,7 @@ describe('PostgresRevenueControlPlaneReader', () => {
     expect(snapshot.openManagerEscalations).toBe(1);
     expect(snapshot.status).toBe('watch');
     expect(snapshot.actions.map((action) => action.type)).toEqual(['manager-escalation', 'pipeline-leakage']);
-    expect(db.queries).toHaveLength(2);
+    expect(db.queries).toHaveLength(3);
   });
 
   it('rejects missing tenant context before querying', async () => {
