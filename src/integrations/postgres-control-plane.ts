@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { RevenueIntelligenceResult } from '../application/revenue-intelligence-service';
 import type { RevenueControlPlaneSnapshot } from '../domain/revenue-control-plane';
 import { buildRevenueControlPlane } from '../domain/revenue-control-plane';
+import { detectRevenueLeakage, rankRevenueLeakage, type RevenueLeakageInput } from '../domain/revenue-leakage';
 import { PostgresDatabase, json, parseJson } from './postgres';
 
 interface FunnelRow {
@@ -15,6 +16,36 @@ interface FunnelRow {
   currency: string;
   attributed_revenue: string;
   escalations: string;
+}
+
+interface LeadLeakRow {
+  id: string;
+  organization_id: string;
+  state: RevenueLeakageInput['state'];
+  created_at: string;
+  updated_at: string;
+  profile: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  last_activity_at: string | null;
+  appointment_completed: boolean;
+  lost_at: string | null;
+}
+
+function numberFromJson(source: Record<string, unknown> | null, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = source?.[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  }
+  return undefined;
+}
+
+function stringFromJson(source: Record<string, unknown> | null, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = source?.[key];
+    if (typeof value === 'string' && value.trim()) return value;
+  }
+  return undefined;
 }
 
 /** Read-only live data adapter. Queries are tenant-scoped by the request transaction/RLS. */
@@ -58,14 +89,9 @@ export class PostgresRevenueControlPlaneReader {
 
     const intelligence: RevenueIntelligenceResult = {
       funnel: {
-        leads: Number(row.leads),
-        contacted: Number(row.contacted),
-        engaged: Number(row.engaged),
-        qualified: Number(row.qualified),
-        booked: Number(row.booked),
-        won: Number(row.won),
-        revenue: Math.round(Number(row.revenue)),
-        currency: row.currency || 'NGN',
+        leads: Number(row.leads), contacted: Number(row.contacted), engaged: Number(row.engaged),
+        qualified: Number(row.qualified), booked: Number(row.booked), won: Number(row.won),
+        revenue: Math.round(Number(row.revenue)), currency: row.currency || 'NGN',
       },
       contactRate: this.rate(Number(row.contacted), Number(row.leads)),
       qualificationRate: this.rate(Number(row.qualified), Number(row.leads)),
@@ -76,12 +102,53 @@ export class PostgresRevenueControlPlaneReader {
       attributedRevenue: Math.round(Number(row.attributed_revenue)),
     };
 
+    const leakRows = await this.db.query<LeadLeakRow>(`
+      select
+        l.id, l.organization_id, l.state, l.created_at, l.updated_at, l.profile, l.metadata,
+        coalesce(c.updated_at, l.updated_at) as last_activity_at,
+        exists (
+          select 1 from appointments a
+          where a.organization_id = l.organization_id and a.lead_id = l.id and a.status = 'completed'
+        ) as appointment_completed,
+        (
+          select max(e.timestamp) from lead_events e
+          where e.organization_id = l.organization_id and e.lead_id = l.id and e.to_state = 'lost'
+        ) as lost_at
+      from leads l
+      left join conversations c on c.organization_id = l.organization_id and c.lead_id = l.id
+      where l.organization_id = $1 and l.state not in ('won','invalid')
+    `, [organizationId]);
+
+    const leakage = rankRevenueLeakage(
+      leakRows.rows
+        .map((lead) => {
+          const profile = lead.profile ?? {};
+          const metadata = lead.metadata ?? {};
+          const input: RevenueLeakageInput = {
+            leadId: lead.id,
+            organizationId: lead.organization_id,
+            state: lead.state,
+            createdAt: new Date(lead.created_at).toISOString(),
+            lastActivityAt: lead.last_activity_at ? new Date(lead.last_activity_at).toISOString() : undefined,
+            deadlineAt: stringFromJson(metadata, ['deadlineAt', 'responseDeadlineAt']),
+            estimatedDealValue: numberFromJson(profile, ['estimatedDealValue', 'dealValue', 'expectedRevenue'])
+              ?? numberFromJson(metadata, ['estimatedDealValue', 'dealValue', 'expectedRevenue']),
+            now,
+            appointmentCompleted: lead.appointment_completed,
+            lostAt: lead.lost_at ? new Date(lead.lost_at).toISOString() : undefined,
+          };
+          return detectRevenueLeakage(input);
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null),
+    );
+
     const snapshot = buildRevenueControlPlane({
       organizationId,
       intelligence,
       workItems: [],
       performance: [],
       managerEscalationCount: Number(row.escalations),
+      leakageOpportunities: leakage,
       now,
     });
 
@@ -98,30 +165,27 @@ export class PostgresRevenueControlPlaneReader {
     const row = result.rows[0];
     if (!row) return null;
     return {
-      organizationId: row.organization_id,
-      currency: row.currency,
-      revenue: Number(row.revenue),
-      revenueRecovered: Number(row.revenue_recovered),
-      revenuePerLead: Number(row.revenue_per_lead),
-      criticalOpenWorkItems: Number(row.critical_open_work_items),
-      slaBreaches: Number(row.sla_breaches),
+      organizationId: row.organization_id, currency: row.currency, revenue: Number(row.revenue),
+      revenueRecovered: Number(row.revenue_recovered), revenuePerLead: Number(row.revenue_per_lead),
+      criticalOpenWorkItems: Number(row.critical_open_work_items), slaBreaches: Number(row.sla_breaches),
       openManagerEscalations: Number(row.open_manager_escalations),
-      atRiskOwners: parseJson(row.at_risk_owners, []),
-      actions: parseJson(row.actions, []),
-      status: row.status,
-      generatedAt: new Date(row.generated_at).toISOString(),
+      estimatedRecoverableRevenue: Number(row.estimated_recoverable_revenue ?? 0),
+      revenueLeakCount: Number(row.revenue_leak_count ?? 0),
+      atRiskOwners: parseJson(row.at_risk_owners, []), actions: parseJson(row.actions, []),
+      status: row.status, generatedAt: new Date(row.generated_at).toISOString(),
     };
   }
 
   private async persist(snapshot: RevenueControlPlaneSnapshot): Promise<void> {
     await this.db.query(`
       insert into revenue_control_snapshots
-      (id,organization_id,status,currency,revenue,revenue_recovered,revenue_per_lead,critical_open_work_items,sla_breaches,open_manager_escalations,at_risk_owners,actions,generated_at)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13)
+      (id,organization_id,status,currency,revenue,revenue_recovered,revenue_per_lead,critical_open_work_items,sla_breaches,open_manager_escalations,estimated_recoverable_revenue,revenue_leak_count,at_risk_owners,actions,generated_at)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15)
     `, [
       randomUUID(), snapshot.organizationId, snapshot.status, snapshot.currency, snapshot.revenue,
       snapshot.revenueRecovered, snapshot.revenuePerLead, snapshot.criticalOpenWorkItems,
-      snapshot.slaBreaches, snapshot.openManagerEscalations, json(snapshot.atRiskOwners), json(snapshot.actions), snapshot.generatedAt,
+      snapshot.slaBreaches, snapshot.openManagerEscalations, snapshot.estimatedRecoverableRevenue,
+      snapshot.revenueLeakCount, json(snapshot.atRiskOwners), json(snapshot.actions), snapshot.generatedAt,
     ]);
   }
 
