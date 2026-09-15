@@ -32,10 +32,7 @@ export class RevenueIntelligenceService {
   calculate(input: RevenueIntelligenceInput): RevenueIntelligenceResult {
     const funnel = buildRevenueFunnel(input);
     const averageDealValue = Math.max(0, input.averageDealValue ?? (funnel.won > 0 ? funnel.revenue / funnel.won : 0));
-    const attributedRevenue = (input.attributionEvents ?? []).reduce(
-      (total, event) => total + (event.status === undefined || event.evidence ? event.amount : 0),
-      0,
-    );
+    const attributedRevenue = (input.attributionEvents ?? []).reduce((total, event) => total + event.amount, 0);
 
     return {
       funnel,
