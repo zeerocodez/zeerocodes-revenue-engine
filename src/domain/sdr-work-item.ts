@@ -28,10 +28,14 @@ export interface SdrWorkItem {
   recommendedAction: string;
   deadlineAt: string;
   slaMinutes: number;
+  slaBreached: boolean;
   script: SdrScriptPack;
   dispositionOptions: SdrDisposition[];
   ownerId?: string;
   createdAt: string;
+  completedAt?: string;
+  disposition?: SdrDisposition;
+  outcomeRevenue?: number;
   status: 'open' | 'claimed' | 'completed' | 'cancelled';
 }
 
@@ -127,6 +131,7 @@ export function createSdrWorkItem(input: SdrWorkItemInput, now = input.now ?? ne
     recommendedAction: input.reason,
     deadlineAt: deadline(now, slaMinutes),
     slaMinutes,
+    slaBreached: input.slaBreached,
     script: buildScript(input.intent, action),
     dispositionOptions: [...DISPOSITIONS],
     ownerId: input.ownerId,
