@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { handleRevenueRecovery } from '../../src/application/revenue-recovery-http';
 
 const recovery = { recover: vi.fn() } as any;
+
+beforeEach(() => recovery.recover.mockReset());
 
 describe('revenue recovery HTTP boundary', () => {
   it('derives tenant and owner from authenticated context', async () => {
