@@ -28,6 +28,13 @@ export class SdrQueueService {
     return item;
   }
 
+  async get(organizationId: string, itemId: string): Promise<SdrWorkItem | null> {
+    const items = await this.store.list(organizationId);
+    const item = items.find((candidate) => candidate.id === itemId) ?? null;
+    if (item && item.organizationId !== organizationId) throw new Error('Tenant access denied');
+    return item;
+  }
+
   async queue(organizationId: string, now = new Date().toISOString()): Promise<SdrQueueSnapshot> {
     const items = (await this.store.list(organizationId))
       .filter((item) => item.status === 'open' || item.status === 'claimed')
