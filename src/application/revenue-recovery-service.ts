@@ -87,9 +87,12 @@ export class RevenueRecoveryService {
       duplicateRevenue = recording.duplicate;
     }
 
-    const completed = await this.queue.complete(input.organizationId, current.id, input.disposition);
-    completed.ownerId = input.ownerId;
-    completed.outcomeRevenue = revenueAmount || completed.outcomeRevenue;
+    const completed = await this.queue.complete(
+      input.organizationId,
+      current.id,
+      input.disposition,
+      { ownerId: input.ownerId, outcomeRevenue: revenueAmount || undefined },
+    );
 
     return {
       workItem: completed,
