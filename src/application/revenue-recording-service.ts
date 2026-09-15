@@ -15,14 +15,18 @@ export interface RevenueRecordingInput extends RevenueAttributionInput {
 export class RevenueRecordingService {
   constructor(private readonly store: RevenueRecordingStore) {}
 
+  async getByIdempotencyKey(organizationId: string, key: string): Promise<RevenueAttributionEvent | null> {
+    if (!key) throw new Error('idempotencyKey is required');
+    const existing = await this.store.getByIdempotencyKey(key);
+    if (existing && existing.organizationId !== organizationId) throw new Error('Tenant access denied');
+    return existing;
+  }
+
   async record(input: RevenueRecordingInput): Promise<{ event: RevenueAttributionEvent; duplicate: boolean }> {
     if (!input.idempotencyKey) throw new Error('idempotencyKey is required');
 
-    const existing = await this.store.getByIdempotencyKey(input.idempotencyKey);
-    if (existing) {
-      if (existing.organizationId !== input.organizationId) throw new Error('Tenant access denied');
-      return { event: existing, duplicate: true };
-    }
+    const existing = await this.getByIdempotencyKey(input.organizationId, input.idempotencyKey);
+    if (existing) return { event: existing, duplicate: true };
 
     const event = createRevenueAttribution(input);
     if (event.organizationId !== input.organizationId) throw new Error('Tenant access denied');
