@@ -25,6 +25,7 @@ describe('qualification orchestrator lifecycle integrity', () => {
     const service = new QualificationOrchestrator({
       get: async () => stored,
       save: async (next) => { Object.assign(stored, next); },
+      list: async () => [stored],
     });
 
     const result = await service.process({
