@@ -81,18 +81,33 @@ export class RevenueRecoveryService {
     let duplicateRevenue = false;
     if (input.disposition === 'won') {
       const recording = await this.revenueRecordingService.record({
-        id: `rev_${current.id}_won`, organizationId: input.organizationId, leadId: current.leadId,
-        attributionType: 'recovered', amount: revenueAmount, currency: input.currency!, ownerId: input.ownerId,
-        recordedAt: input.now, evidence: 'won-outcome', idempotencyKey: `recovery:${current.id}:won`,
+        id: `rev_${current.id}_won`,
+        organizationId: input.organizationId,
+        leadId: current.leadId,
+        attributionType: 'recovered',
+        amount: revenueAmount,
+        currency: input.currency!,
+        ownerId: input.ownerId,
+        recordedAt: input.now,
+        evidence: 'won-outcome',
+        idempotencyKey: `recovery:${current.id}:won`,
       });
       revenueRecorded = true;
       duplicateRevenue = recording.duplicate;
     }
 
     const completed = await this.queue.complete(input.organizationId, current.id, input.disposition, {
-      ownerId: input.ownerId, outcomeRevenue: revenueAmount || undefined,
+      ownerId: input.ownerId,
+      outcomeRevenue: revenueAmount || undefined,
     });
-    return { workItem: completed, disposition: input.disposition, lifecycleState: lifecycle.state,
-      transitioned: lifecycle.transitioned, revenueRecorded, revenueAmount, duplicateRevenue };
+    return {
+      workItem: completed,
+      disposition: input.disposition,
+      lifecycleState: lifecycle.state,
+      transitioned: lifecycle.transitioned,
+      revenueRecorded,
+      revenueAmount,
+      duplicateRevenue,
+    };
   }
 }
