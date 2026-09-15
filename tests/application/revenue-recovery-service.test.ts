@@ -44,7 +44,13 @@ class MemoryRevenueStore implements RevenueRecordingStore {
 
 class MemoryAttributionStore implements RevenueRecoveryAttributionStore {
   readonly events: RevenueRecoveryAttribution[] = [];
-  async save(event: RevenueRecoveryAttribution) { this.events.push(structuredClone(event)); }
+  async save(event: RevenueRecoveryAttribution) {
+    if (!this.events.some((existing) => existing.id === event.id)) this.events.push(structuredClone(event));
+  }
+  async getById(organizationId: string, id: string) {
+    const event = this.events.find((candidate) => candidate.organizationId === organizationId && candidate.id === id);
+    return event ? structuredClone(event) : null;
+  }
   async listByLead(organizationId: string, leadId: string) {
     return this.events.filter((event) => event.organizationId === organizationId && event.leadId === leadId).map((event) => structuredClone(event));
   }
@@ -114,6 +120,25 @@ describe('RevenueRecoveryService', () => {
     expect(attributionStore.events[0].leakageOpportunityId).toBe('leak_1');
     expect(attributionStore.events[0].recoveryRate).toBeCloseTo(83.33);
     expect((await leadStore.get('lead_1'))?.state).toBe('won');
+  });
+
+  it('replays a duplicate WON request without creating a second revenue event or lifecycle transition', async () => {
+    const { recovery, revenueStore, attributionStore } = build('booked');
+    const input = {
+      organizationId: 'org_1', workItemId: 'sdr_1', ownerId: 'closer_2', disposition: 'won' as const,
+      outcomeRevenue: 2500000, currency: 'NGN', leakageOpportunityId: 'leak_1', leakageType: 'qualified-no-booking',
+      leakageValue: 3000000, recoverySource: 'closer' as const, now: '2026-09-14T10:10:00.000Z',
+    };
+    const first = await recovery.recover(input);
+    const second = await recovery.recover(input);
+    expect(first.duplicateRevenue).toBe(false);
+    expect(second.duplicateRevenue).toBe(true);
+    expect(second.transitioned).toBe(false);
+    expect(second.revenueRecorded).toBe(true);
+    expect(second.recoveryAttributed).toBe(true);
+    expect(second.revenueAmount).toBe(2500000);
+    expect(revenueStore.events).toHaveLength(1);
+    expect(attributionStore.events).toHaveLength(1);
   });
 
   it('rejects won recovery without revenue before changing lifecycle state', async () => {
