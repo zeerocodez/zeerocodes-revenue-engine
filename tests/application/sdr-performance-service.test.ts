@@ -3,12 +3,13 @@ import { SdrPerformanceService } from '../../src/application/sdr-performance-ser
 
 const item = (overrides: Record<string, unknown> = {}) => ({
   id: 'work_1', organizationId: 'org_1', leadId: 'lead_1', leadName: 'Ada', leadState: 'qualified' as const,
-  priorityScore: 80, priorityBand: 'high' as const, nextAction: 'sdr-call-now' as const,
-  reason: 'qualified opportunity', now: '2026-09-15T08:00:00.000Z', intent: 'qualification' as const,
-  action: 'call-now' as const, whyNow: 'high priority', whyEscalated: 'revenue opportunity',
-  slaMinutes: 20, deadlineAt: '2026-09-15T08:20:00.000Z', slaBreached: false,
+  priorityScore: 80, priorityBand: 'high' as const, action: 'call-now' as const,
+  whyNow: 'high priority', whyEscalated: 'revenue opportunity', recommendedAction: 'call now',
+  deadlineAt: '2026-09-15T08:20:00.000Z', slaMinutes: 20, slaBreached: false,
+  script: { opening: 'Hi', objective: 'qualify', qualificationQuestions: [], objectionResponses: [], closing: 'Next step?' },
   dispositionOptions: ['qualified', 'appointment-booked', 'won'] as const,
-  assignedTo: 'sdr_1', disposition: 'qualified' as const, completedAt: '2026-09-15T08:05:00.000Z',
+  ownerId: 'sdr_1', createdAt: '2026-09-15T08:00:00.000Z', status: 'completed' as const,
+  disposition: 'qualified' as const, completedAt: '2026-09-15T08:05:00.000Z',
   ...overrides,
 });
 
