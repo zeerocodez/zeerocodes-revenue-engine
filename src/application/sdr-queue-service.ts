@@ -12,6 +12,11 @@ export interface SdrQueueSnapshot {
   breachedCount: number;
 }
 
+export interface SdrCompletionMetadata {
+  ownerId?: string;
+  outcomeRevenue?: number;
+}
+
 export class SdrQueueService {
   constructor(private readonly store: SdrWorkItemStore) {}
 
@@ -53,7 +58,12 @@ export class SdrQueueService {
     return item;
   }
 
-  async complete(organizationId: string, itemId: string, disposition: string): Promise<SdrWorkItem> {
+  async complete(
+    organizationId: string,
+    itemId: string,
+    disposition: string,
+    metadata: SdrCompletionMetadata = {},
+  ): Promise<SdrWorkItem> {
     const items = await this.store.list(organizationId);
     const item = items.find((candidate) => candidate.id === itemId);
     if (!item) throw new Error('SDR work item not found');
@@ -61,6 +71,10 @@ export class SdrQueueService {
     if (!item.script || !item.dispositionOptions.includes(disposition as never)) throw new Error('Invalid disposition');
     if (item.status !== 'claimed' && item.status !== 'open') throw new Error('SDR work item is not active');
     item.status = 'completed';
+    if (metadata.ownerId) item.ownerId = metadata.ownerId;
+    if (metadata.outcomeRevenue !== undefined) item.outcomeRevenue = Math.max(0, Math.round(metadata.outcomeRevenue));
+    item.completedAt = new Date().toISOString();
+    item.disposition = disposition as SdrWorkItem['disposition'];
     item.recommendedAction = `Completed with disposition: ${disposition}`;
     await this.store.save(item);
     return item;
