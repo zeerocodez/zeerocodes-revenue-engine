@@ -30,7 +30,9 @@ function extractAnswers(text: string): Partial<QualificationProfile> {
 function desiredState(lead: LeadRecord, decision: ConversationDecision): LeadState {
   if (decision.action === 'opt-out') return 'lost';
   if (decision.action === 'escalate-complaint' || decision.action === 'escalate-sdr') return 'engaged';
-  if (decision.action === 'handoff-closer') return 'booked';
+  // A closer handoff is an operational action, not proof that an appointment exists.
+  // The lifecycle may enter `booked` only when appointment evidence is present.
+  if (decision.action === 'handoff-closer') return lead.state === 'qualified' ? 'qualified' : 'engaged';
   if (lead.qualification?.qualified) return 'qualified';
   return 'qualifying';
 }
