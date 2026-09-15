@@ -76,6 +76,7 @@ export class RevenueRecoveryService {
 
     if (input.disposition === 'won') {
       const recording = await this.revenueRecordingService.record({
+        id: `rev_${current.id}_won`,
         organizationId: input.organizationId,
         leadId: current.leadId,
         attributionType: 'recovered',
