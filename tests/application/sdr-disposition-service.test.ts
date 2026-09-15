@@ -23,7 +23,8 @@ function item(state: LeadRecord['state']): SdrWorkItem {
     id: 'sdr_1', organizationId: 'org_1', leadId: 'lead_1', leadName: 'Ada',
     priorityScore: 90, priorityBand: 'high', action: 'call-now', whyNow: 'hot',
     leadState: state, recommendedAction: 'call', deadlineAt: '2026-09-14T10:05:00.000Z',
-    slaMinutes: 5, script: { opening: 'Hi', objective: 'qualify', qualificationQuestions: [], objectionResponses: [], closing: 'Next step?' },
+    slaMinutes: 5, slaBreached: false,
+    script: { opening: 'Hi', objective: 'qualify', qualificationQuestions: [], objectionResponses: [], closing: 'Next step?' },
     dispositionOptions: ['connected', 'no-answer', 'callback-requested', 'qualified', 'appointment-booked', 'won', 'not-qualified', 'lost', 'nurture', 'wrong-number', 'do-not-contact'],
     createdAt: '2026-09-14T10:00:00.000Z', status: 'claimed',
   };
