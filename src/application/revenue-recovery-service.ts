@@ -27,12 +27,7 @@ export interface RevenueRecoveryResult {
   duplicateRevenue: boolean;
 }
 
-/**
- * Closes the operational loop: claim -> disposition -> lifecycle outcome ->
- * revenue attribution -> work-item completion. Lifecycle transition happens
- * before the work item is completed so failed business rules cannot hide an
- * unresolved exception from the control plane.
- */
+/** Closes the operational recovery loop without allowing cross-owner actions. */
 export class RevenueRecoveryService {
   constructor(
     private readonly queue: SdrQueueService,
@@ -50,8 +45,8 @@ export class RevenueRecoveryService {
       if (!input.currency) throw new Error('won recovery requires currency');
     }
 
-    const queue = await this.queue.queue(input.organizationId, input.now);
-    const item = queue.items.find((candidate) => candidate.id === input.workItemId);
+    const snapshot = await this.queue.queue(input.organizationId, input.now);
+    const item = snapshot.items.find((candidate) => candidate.id === input.workItemId);
     if (!item) throw new Error('SDR work item not found or already completed');
     if (item.organizationId !== input.organizationId) throw new Error('Tenant access denied');
     if (item.status === 'open') await this.queue.claim(input.organizationId, item.id, input.ownerId);
@@ -60,6 +55,7 @@ export class RevenueRecoveryService {
       (candidate) => candidate.id === input.workItemId,
     );
     if (!current) throw new Error('SDR work item disappeared during recovery');
+    if (current.ownerId !== input.ownerId) throw new Error('SDR work item is assigned to another owner');
 
     const lifecycle = await this.dispositionService.apply({
       organizationId: input.organizationId,
@@ -73,39 +69,20 @@ export class RevenueRecoveryService {
 
     let revenueRecorded = false;
     let duplicateRevenue = false;
-
     if (input.disposition === 'won') {
       const recording = await this.revenueRecordingService.record({
-        id: `rev_${current.id}_won`,
-        organizationId: input.organizationId,
-        leadId: current.leadId,
-        attributionType: 'recovered',
-        amount: revenueAmount,
-        currency: input.currency!,
-        ownerId: input.ownerId,
-        recordedAt: input.now,
-        evidence: 'won-outcome',
-        idempotencyKey: `recovery:${current.id}:won`,
+        id: `rev_${current.id}_won`, organizationId: input.organizationId, leadId: current.leadId,
+        attributionType: 'recovered', amount: revenueAmount, currency: input.currency!, ownerId: input.ownerId,
+        recordedAt: input.now, evidence: 'won-outcome', idempotencyKey: `recovery:${current.id}:won`,
       });
       revenueRecorded = true;
       duplicateRevenue = recording.duplicate;
     }
 
-    const completed = await this.queue.complete(
-      input.organizationId,
-      current.id,
-      input.disposition,
-      { ownerId: input.ownerId, outcomeRevenue: revenueAmount || undefined },
-    );
-
-    return {
-      workItem: completed,
-      disposition: input.disposition,
-      lifecycleState: lifecycle.state,
-      transitioned: lifecycle.transitioned,
-      revenueRecorded,
-      revenueAmount,
-      duplicateRevenue,
-    };
+    const completed = await this.queue.complete(input.organizationId, current.id, input.disposition, {
+      ownerId: input.ownerId, outcomeRevenue: revenueAmount || undefined,
+    });
+    return { workItem: completed, disposition: input.disposition, lifecycleState: lifecycle.state,
+      transitioned: lifecycle.transitioned, revenueRecorded, revenueAmount, duplicateRevenue };
   }
 }
