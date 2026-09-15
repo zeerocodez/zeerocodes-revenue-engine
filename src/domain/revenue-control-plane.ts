@@ -3,139 +3,20 @@ import type { SdrPerformanceResult } from '../application/sdr-performance-servic
 import type { SdrWorkItem } from './sdr-work-item';
 import type { RevenueLeakageOpportunity } from './revenue-leakage';
 
-export type ControlActionType =
-  | 'critical-opportunity'
-  | 'sla-breach'
-  | 'manager-escalation'
-  | 'pipeline-leakage'
-  | 'underperforming-owner'
-  | 'revenue-leak';
-
-export type ControlSeverity = 'critical' | 'high' | 'medium';
-
-export interface RevenueControlAction {
-  id: string;
-  type: ControlActionType;
-  severity: ControlSeverity;
-  title: string;
-  reason: string;
-  leadId?: string;
-  workItemId?: string;
-  ownerId?: string;
-  recommendedAction: string;
-  createdAt: string;
-}
-
-export interface RevenueControlPlaneInput {
-  organizationId: string;
-  intelligence: RevenueIntelligenceResult;
-  workItems: SdrWorkItem[];
-  performance: SdrPerformanceResult[];
-  managerEscalationCount?: number;
-  leakageOpportunities?: RevenueLeakageOpportunity[];
-  now?: string;
-}
-
-export interface RevenueControlPlaneSnapshot {
-  organizationId: string;
-  currency: string;
-  revenue: number;
-  revenueRecovered: number;
-  revenuePerLead: number;
-  criticalOpenWorkItems: number;
-  slaBreaches: number;
-  openManagerEscalations: number;
-  estimatedRecoverableRevenue: number;
-  revenueLeakCount: number;
-  atRiskOwners: string[];
-  actions: RevenueControlAction[];
-  status: 'clear' | 'watch' | 'intervene';
-  generatedAt: string;
-}
-
-const severityRank: Record<ControlSeverity, number> = { critical: 3, high: 2, medium: 1 };
-
-function action(
-  organizationId: string,
-  type: ControlActionType,
-  severity: ControlSeverity,
-  title: string,
-  reason: string,
-  recommendedAction: string,
-  now: string,
-  leadId?: string,
-  ownerId?: string,
-  workItemId?: string,
-): RevenueControlAction {
-  return {
-    id: `${organizationId}_${type}_${workItemId ?? leadId ?? ownerId ?? 'team'}_${Date.parse(now)}`,
-    type,
-    severity,
-    title,
-    reason,
-    leadId,
-    workItemId,
-    ownerId,
-    recommendedAction,
-    createdAt: now,
-  };
-}
-
-/** Converts measured revenue and operating exceptions into manager actions. */
-export function buildRevenueControlPlane(input: RevenueControlPlaneInput): RevenueControlPlaneSnapshot {
-  const now = input.now ?? new Date().toISOString();
-  const actions: RevenueControlAction[] = [];
-  const scopedItems = input.workItems.filter((item) => item.organizationId === input.organizationId);
-  const leakage = (input.leakageOpportunities ?? []).filter((item) => item.organizationId === input.organizationId);
-
-  for (const item of scopedItems) {
-    if (item.status === 'completed' || item.status === 'cancelled') continue;
-    if (item.priorityBand === 'critical') {
-      actions.push(action(input.organizationId, 'critical-opportunity', 'critical', `Critical opportunity: ${item.leadName}`, item.whyNow, item.recommendedAction, now, item.leadId, item.ownerId, item.id));
-    }
-    if (item.slaBreached) {
-      actions.push(action(input.organizationId, 'sla-breach', item.priorityBand === 'critical' ? 'critical' : 'high', `SLA breach: ${item.leadName}`, 'The lead response deadline has been missed.', 'Recover the lead immediately and record the outcome.', now, item.leadId, item.ownerId, item.id));
-    }
-  }
-
-  for (const leak of leakage) {
-    actions.push(action(input.organizationId, 'revenue-leak', leak.severity, `Revenue leak: ${leak.leadId}`, leak.reason, leak.recommendedAction, now, leak.leadId));
-  }
-
-  if (input.managerEscalationCount && input.managerEscalationCount > 0) {
-    actions.push(action(input.organizationId, 'manager-escalation', 'high', `${input.managerEscalationCount} manager escalation${input.managerEscalationCount === 1 ? '' : 's'} open`, 'Exceptions require management intervention.', 'Review escalations and assign a clear owner and deadline.', now));
-  }
-
-  if (input.intelligence.funnel.qualified > 0 && input.intelligence.funnel.booked === 0) {
-    actions.push(action(input.organizationId, 'pipeline-leakage', 'high', 'Qualified leads are not reaching booked appointments', `${input.intelligence.funnel.qualified} qualified lead${input.intelligence.funnel.qualified === 1 ? '' : 's'} have produced no booking.`, 'Audit follow-up, objection handling, and appointment-setting execution.', now));
-  }
-
-  const atRiskOwners = input.performance.filter((owner) => owner.slaAdherenceRate < 80 || (owner.assigned >= 5 && owner.closeRate < 10)).map((owner) => owner.ownerId);
-  for (const ownerId of atRiskOwners) {
-    const owner = input.performance.find((item) => item.ownerId === ownerId);
-    actions.push(action(input.organizationId, 'underperforming-owner', 'medium', `Owner needs intervention: ${ownerId}`, owner && owner.slaAdherenceRate < 80 ? `SLA adherence is ${owner.slaAdherenceRate}%.` : `Close rate is ${owner?.closeRate ?? 0}% with ${owner?.assigned ?? 0} assigned items.`, 'Review workload, call quality, follow-up discipline, and coaching needs.', now, undefined, ownerId));
-  }
-
-  actions.sort((a, b) => severityRank[b.severity] - severityRank[a.severity]);
-  const criticalOpenWorkItems = scopedItems.filter((item) => item.status !== 'completed' && item.status !== 'cancelled' && item.priorityBand === 'critical').length;
-  const slaBreaches = scopedItems.filter((item) => item.status !== 'completed' && item.status !== 'cancelled' && item.slaBreached).length;
-  const estimatedRecoverableRevenue = leakage.reduce((sum, item) => sum + item.estimatedRecoverableRevenue, 0);
-  const status: RevenueControlPlaneSnapshot['status'] = actions.some((item) => item.severity === 'critical') ? 'intervene' : actions.length > 0 ? 'watch' : 'clear';
-
-  return {
-    organizationId: input.organizationId,
-    currency: input.intelligence.funnel.currency,
-    revenue: input.intelligence.funnel.revenue,
-    revenueRecovered: input.intelligence.revenueRecovered,
-    revenuePerLead: input.intelligence.revenuePerLead,
-    criticalOpenWorkItems,
-    slaBreaches,
-    openManagerEscalations: input.managerEscalationCount ?? 0,
-    estimatedRecoverableRevenue,
-    revenueLeakCount: leakage.length,
-    atRiskOwners,
-    actions,
-    status,
-    generatedAt: now,
-  };
+export type ControlActionType = 'critical-opportunity'|'sla-breach'|'manager-escalation'|'pipeline-leakage'|'underperforming-owner'|'revenue-leak';
+export type ControlSeverity = 'critical'|'high'|'medium';
+export interface RevenueControlAction { id:string; type:ControlActionType; severity:ControlSeverity; title:string; reason:string; leadId?:string; workItemId?:string; ownerId?:string; recommendedAction:string; createdAt:string; }
+export interface RevenueControlPlaneInput { organizationId:string; intelligence:RevenueIntelligenceResult; workItems:SdrWorkItem[]; performance:SdrPerformanceResult[]; managerEscalationCount?:number; leakageOpportunities?:RevenueLeakageOpportunity[]; now?:string; }
+export interface RevenueControlPlaneSnapshot { organizationId:string; currency:string; revenue:number; revenueRecovered:number; revenuePerLead:number; criticalOpenWorkItems:number; slaBreaches:number; openManagerEscalations:number; estimatedRecoverableRevenue:number; revenueLeakCount:number; atRiskOwners:string[]; actions:RevenueControlAction[]; status:'clear'|'watch'|'intervene'; generatedAt:string; }
+const severityRank:Record<ControlSeverity,number>={critical:3,high:2,medium:1};
+function action(organizationId:string,type:ControlActionType,severity:ControlSeverity,title:string,reason:string,recommendedAction:string,now:string,leadId?:string,ownerId?:string,workItemId?:string):RevenueControlAction{return{id:`${organizationId}_${type}_${workItemId??leadId??ownerId??'team'}_${Date.parse(now)}`,type,severity,title,reason,leadId,workItemId,ownerId,recommendedAction,createdAt:now};}
+export function buildRevenueControlPlane(input:RevenueControlPlaneInput):RevenueControlPlaneSnapshot {
+ const now=input.now??new Date().toISOString(); const actions:RevenueControlAction[]=[]; const scopedItems=input.workItems.filter(i=>i.organizationId===input.organizationId); const leakage=(input.leakageOpportunities??[]).filter(i=>i.organizationId===input.organizationId);
+ for(const item of scopedItems){if(item.status==='completed'||item.status==='cancelled')continue;if(item.priorityBand==='critical')actions.push(action(input.organizationId,'critical-opportunity','critical',`Critical opportunity: ${item.leadName}`,item.whyNow,item.recommendedAction,now,item.leadId,item.ownerId,item.id));if(item.slaBreached)actions.push(action(input.organizationId,'sla-breach',item.priorityBand==='critical'?'critical':'high',`SLA breach: ${item.leadName}`,'The lead response deadline has been missed.','Recover the lead immediately and record the outcome.',now,item.leadId,item.ownerId,item.id));}
+ for(const leak of leakage){const severity:ControlSeverity=leak.severity==='low'?'medium':leak.severity;actions.push(action(input.organizationId,'revenue-leak',severity,`Revenue leak: ${leak.leadId}`,leak.reason,leak.recommendedAction,now,leak.leadId));}
+ if(input.managerEscalationCount&&input.managerEscalationCount>0)actions.push(action(input.organizationId,'manager-escalation','high',`${input.managerEscalationCount} manager escalation${input.managerEscalationCount===1?'':'s'} open`,'Exceptions require management intervention.','Review escalations and assign a clear owner and deadline.',now));
+ if(input.intelligence.funnel.qualified>0&&input.intelligence.funnel.booked===0)actions.push(action(input.organizationId,'pipeline-leakage','high','Qualified leads are not reaching booked appointments',`${input.intelligence.funnel.qualified} qualified lead${input.intelligence.funnel.qualified===1?'':'s'} have produced no booking.`,'Audit follow-up, objection handling, and appointment-setting execution.',now));
+ const atRiskOwners=input.performance.filter(o=>o.slaAdherenceRate<80||(o.assigned>=5&&o.closeRate<10)).map(o=>o.ownerId);for(const ownerId of atRiskOwners){const owner=input.performance.find(i=>i.ownerId===ownerId);actions.push(action(input.organizationId,'underperforming-owner','medium',`Owner needs intervention: ${ownerId}`,owner&&owner.slaAdherenceRate<80?`SLA adherence is ${owner.slaAdherenceRate}%.`:`Close rate is ${owner?.closeRate??0}% with ${owner?.assigned??0} assigned items.`,'Review workload, call quality, follow-up discipline, and coaching needs.',now,undefined,ownerId));}
+ actions.sort((a,b)=>severityRank[b.severity]-severityRank[a.severity]);const criticalOpenWorkItems=scopedItems.filter(i=>i.status!=='completed'&&i.status!=='cancelled'&&i.priorityBand==='critical').length;const slaBreaches=scopedItems.filter(i=>i.status!=='completed'&&i.status!=='cancelled'&&i.slaBreached).length;const estimatedRecoverableRevenue=leakage.reduce((sum,i)=>sum+i.estimatedRecoverableRevenue,0);const status:RevenueControlPlaneSnapshot['status']=actions.some(i=>i.severity==='critical')?'intervene':actions.length>0?'watch':'clear';
+ return{organizationId:input.organizationId,currency:input.intelligence.funnel.currency,revenue:input.intelligence.funnel.revenue,revenueRecovered:input.intelligence.revenueRecovered,revenuePerLead:input.intelligence.revenuePerLead,criticalOpenWorkItems,slaBreaches,openManagerEscalations:input.managerEscalationCount??0,estimatedRecoverableRevenue,revenueLeakCount:leakage.length,atRiskOwners,actions,status,generatedAt:now};
 }
