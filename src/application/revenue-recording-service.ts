@@ -1,4 +1,4 @@
-import type { RevenueAttributionEvent, RevenueAttributionInput } from '../domain/revenue-attribution';
+import { createRevenueAttribution, type RevenueAttributionEvent, type RevenueAttributionInput } from '../domain/revenue-attribution';
 
 export interface RevenueRecordingStore {
   getById(id: string): Promise<RevenueAttributionEvent | null>;
@@ -24,7 +24,6 @@ export class RevenueRecordingService {
       return { event: existing, duplicate: true };
     }
 
-    const { createRevenueAttribution } = await import('../domain/revenue-attribution');
     const event = createRevenueAttribution(input);
     if (event.organizationId !== input.organizationId) throw new Error('Tenant access denied');
 
