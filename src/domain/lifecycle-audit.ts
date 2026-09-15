@@ -1,4 +1,4 @@
-import { canTransition, type LeadState } from './lead-state';
+import { canTransition } from './lead-state';
 import type { LeadEvent } from './lead-events';
 
 export interface LifecycleAuditIssue {
@@ -38,12 +38,12 @@ export function auditLifecycleEvent(event: LeadEvent): LifecycleAuditResult {
     });
   }
 
-  if (event.toState === ('booked' as LeadState) && !metadata.appointmentId) {
+  if (event.toState === 'booked' && metadata.appointmentStatus !== 'scheduled' && metadata.appointmentStatus !== 'confirmed') {
     issues.push({
       eventId: event.id,
       leadId: event.leadId,
       code: 'booked-without-appointment',
-      message: 'Booked state requires appointment evidence.',
+      message: 'Booked state requires a scheduled or confirmed appointment.',
     });
   }
 
@@ -62,10 +62,11 @@ export function auditLifecycleEvent(event: LeadEvent): LifecycleAuditResult {
 export function summarizeLifecycleAudit(events: LeadEvent[]): LifecycleAuditSummary {
   const stateEvents = events.filter((event) => event.type === 'lead.state_changed');
   const issues = stateEvents.flatMap((event) => auditLifecycleEvent(event).issues);
+  const invalidEventIds = new Set(issues.map((issue) => issue.eventId));
   return {
     eventsAudited: stateEvents.length,
-    validEvents: stateEvents.length - new Set(issues.map((issue) => issue.eventId)).size,
-    invalidEvents: new Set(issues.map((issue) => issue.eventId)).size,
+    validEvents: stateEvents.length - invalidEventIds.size,
+    invalidEvents: invalidEventIds.size,
     issues,
   };
 }
