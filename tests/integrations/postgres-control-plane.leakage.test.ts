@@ -5,7 +5,7 @@ function dbMock() {
   let persisted: unknown[] = [];
   return {
     persisted,
-    async query<T extends Record<string, unknown>>(sql: string): Promise<{ rows: T[] }> {
+    async query<T = unknown>(sql: string): Promise<{ rows: T[] }> {
       if (sql.includes('from leads l')) {
         return {
           rows: [{
