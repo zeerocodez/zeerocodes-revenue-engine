@@ -1,5 +1,6 @@
 import type { SdrWorkItem } from '../domain/sdr-work-item';
 import type { SdrWorkItemStore } from '../application/sdr-queue-service';
+import type { RevenueRecoveryTransaction } from '../application/revenue-recovery-service';
 import { json, parseJson, type PostgresDatabase } from './postgres';
 
 interface SdrWorkItemRow {
@@ -7,7 +8,11 @@ interface SdrWorkItemRow {
 }
 
 export class PostgresSdrWorkItemStore implements SdrWorkItemStore {
-  constructor(private readonly db: PostgresDatabase) {}
+  readonly transaction: RevenueRecoveryTransaction;
+
+  constructor(private readonly db: PostgresDatabase) {
+    this.transaction = { run: <T>(work: () => Promise<T>) => this.db.withTransaction(async () => work()) };
+  }
 
   async list(organizationId: string): Promise<SdrWorkItem[]> {
     const result = await this.db.query<SdrWorkItemRow>(
