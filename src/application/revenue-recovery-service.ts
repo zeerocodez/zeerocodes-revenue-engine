@@ -27,15 +27,25 @@ export interface RevenueRecoveryResult {
   duplicateRevenue: boolean;
 }
 
+export interface RevenueRecoveryTransaction {
+  run<T>(work: () => Promise<T>): Promise<T>;
+}
+
 /** Closes the operational recovery loop without allowing cross-owner actions. */
 export class RevenueRecoveryService {
   constructor(
     private readonly queue: SdrQueueService,
     private readonly dispositionService: SdrDispositionService,
     private readonly revenueRecordingService: RevenueRecordingService,
+    private readonly transaction?: RevenueRecoveryTransaction,
   ) {}
 
   async recover(input: RevenueRecoveryInput): Promise<RevenueRecoveryResult> {
+    const execute = () => this.recoverWithinTransaction(input);
+    return this.transaction ? this.transaction.run(execute) : execute();
+  }
+
+  private async recoverWithinTransaction(input: RevenueRecoveryInput): Promise<RevenueRecoveryResult> {
     if (!input.organizationId) throw new Error('organizationId is required');
     if (!input.ownerId) throw new Error('ownerId is required');
 
