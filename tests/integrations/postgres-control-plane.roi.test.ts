@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { PostgresDatabase } from '../../src/integrations/postgres';
 import { PostgresRevenueControlPlaneReader } from '../../src/integrations/postgres-control-plane';
 
 describe('PostgresRevenueControlPlaneReader ROI metrics', () => {
@@ -15,7 +16,7 @@ describe('PostgresRevenueControlPlaneReader ROI metrics', () => {
         }
         return { rows: [] as T[] };
       },
-    };
+    } as unknown as PostgresDatabase;
 
     const reader = new PostgresRevenueControlPlaneReader(db);
     const snapshot = await reader.calculate('org-1', '2026-09-15T10:00:00.000Z');
