@@ -20,7 +20,7 @@ function item(): SdrWorkItem {
 }
 
 class WorkStore implements SdrWorkItemStore { constructor(public items = [item()]) {} async list() { return this.items; } async save(i: SdrWorkItem) { this.items = this.items.map(x => x.id === i.id ? i : x); } }
-class LeadStore implements LeadLifecycleStore { private lead: LeadRecord = { id: 'lead_1', organizationId: 'org_1', name: 'Ada', state: 'qualified', createdAt: '2026-09-15T08:00:00.000Z', updatedAt: '2026-09-15T08:00:00.000Z' }; async get() { return this.lead; } async save(l: LeadRecord) { this.lead = l; } }
+class LeadStore implements LeadLifecycleStore { private lead: LeadRecord = { id: 'lead_1', organizationId: 'org_1', name: 'Ada', state: 'qualified', profile: {}, consent: true, createdAt: '2026-09-15T08:00:00.000Z', updatedAt: '2026-09-15T08:00:00.000Z' }; async get() { return this.lead; } async save(l: LeadRecord) { this.lead = l; } }
 class RevenueStore implements RevenueRecordingStore { async getById(): Promise<RevenueAttributionEvent | null> { return null; } async getByIdempotencyKey(): Promise<RevenueAttributionEvent | null> { return null; } async save() {} }
 
 describe('RevenueRecoveryService ownership', () => {
