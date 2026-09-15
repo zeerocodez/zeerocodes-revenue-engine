@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { createLead, type LeadRecord } from '../../src/domain/lead';
 import type { LeadEvent, LeadEventStore } from '../../src/domain/lead-events';
 import type { SdrWorkItem } from '../../src/domain/sdr-work-item';
+import type { RevenueRecoveryAttribution } from '../../src/domain/revenue-recovery-attribution';
 import { LeadLifecycleService, type LeadLifecycleStore } from '../../src/application/lead-lifecycle-service';
 import { RevenueRecordingService, type RevenueRecordingStore } from '../../src/application/revenue-recording-service';
 import { RevenueRecoveryService } from '../../src/application/revenue-recovery-service';
 import { SdrDispositionService } from '../../src/application/sdr-disposition-service';
 import { SdrQueueService, type SdrWorkItemStore } from '../../src/application/sdr-queue-service';
 import type { RevenueAttributionEvent } from '../../src/domain/revenue-attribution';
+import type { RevenueRecoveryAttributionStore } from '../../src/integrations/postgres-recovery-attribution';
 
 class MemoryLeadStore implements LeadLifecycleStore {
   private readonly leads = new Map<string, LeadRecord>();
@@ -40,6 +42,14 @@ class MemoryRevenueStore implements RevenueRecordingStore {
   async save(event: RevenueAttributionEvent, key: string) { this.events.push(event); this.keys.set(key, event); }
 }
 
+class MemoryAttributionStore implements RevenueRecoveryAttributionStore {
+  readonly events: RevenueRecoveryAttribution[] = [];
+  async save(event: RevenueRecoveryAttribution) { this.events.push(structuredClone(event)); }
+  async listByLead(organizationId: string, leadId: string) {
+    return this.events.filter((event) => event.organizationId === organizationId && event.leadId === leadId).map((event) => structuredClone(event));
+  }
+}
+
 function lead(state: LeadRecord['state']): LeadRecord {
   return { ...createLead({ organizationId: 'org_1', name: 'Ada', consent: true }, '2026-09-14T09:00:00.000Z'), id: 'lead_1', state };
 }
@@ -61,11 +71,12 @@ function build(seedState: LeadRecord['state']) {
   const leadStore = new MemoryLeadStore(lead(seedState));
   const events = new MemoryEventStore();
   const revenueStore = new MemoryRevenueStore();
+  const attributionStore = new MemoryAttributionStore();
   const queue = new SdrQueueService(workStore);
   const disposition = new SdrDispositionService(new LeadLifecycleService(leadStore, events));
   const recording = new RevenueRecordingService(revenueStore);
-  const recovery = new RevenueRecoveryService(queue, disposition, recording);
-  return { workStore, leadStore, revenueStore, recovery };
+  const recovery = new RevenueRecoveryService(queue, disposition, recording, attributionStore);
+  return { workStore, leadStore, revenueStore, attributionStore, recovery };
 }
 
 describe('RevenueRecoveryService', () => {
@@ -81,40 +92,44 @@ describe('RevenueRecoveryService', () => {
 
   it('moves qualified to booked only when appointment evidence exists', async () => {
     const { recovery, leadStore } = build('qualified');
-    const result = await recovery.recover({
-      organizationId: 'org_1', workItemId: 'sdr_1', ownerId: 'sdr_7', disposition: 'appointment-booked',
-      appointmentId: 'appt_1', appointmentStatus: 'confirmed',
-    });
+    const result = await recovery.recover({ organizationId: 'org_1', workItemId: 'sdr_1', ownerId: 'sdr_7', disposition: 'appointment-booked', appointmentId: 'appt_1', appointmentStatus: 'confirmed' });
     expect(result.lifecycleState).toBe('booked');
     expect((await leadStore.get('lead_1'))?.state).toBe('booked');
   });
 
-  it('records recovered revenue exactly once when a booked lead is won', async () => {
-    const { recovery, revenueStore, leadStore } = build('booked');
+  it('records recovered revenue and its leakage attribution exactly once', async () => {
+    const { recovery, revenueStore, attributionStore, leadStore } = build('booked');
     const result = await recovery.recover({
       organizationId: 'org_1', workItemId: 'sdr_1', ownerId: 'closer_2', disposition: 'won',
-      outcomeRevenue: 2500000, currency: 'NGN', now: '2026-09-14T10:10:00.000Z',
+      outcomeRevenue: 2500000, currency: 'NGN', leakageOpportunityId: 'leak_1', leakageType: 'qualified-no-booking',
+      leakageValue: 3000000, recoverySource: 'closer', now: '2026-09-14T10:10:00.000Z',
     });
     expect(result.lifecycleState).toBe('won');
     expect(result.revenueRecorded).toBe(true);
     expect(result.duplicateRevenue).toBe(false);
     expect(result.revenueAmount).toBe(2500000);
+    expect(result.recoveryAttributed).toBe(true);
     expect(revenueStore.events).toHaveLength(1);
-    expect(revenueStore.events[0].attributionType).toBe('recovered');
+    expect(attributionStore.events).toHaveLength(1);
+    expect(attributionStore.events[0].leakageOpportunityId).toBe('leak_1');
+    expect(attributionStore.events[0].recoveryRate).toBeCloseTo(83.33);
     expect((await leadStore.get('lead_1'))?.state).toBe('won');
   });
 
   it('rejects won recovery without revenue before changing lifecycle state', async () => {
     const { recovery, leadStore } = build('booked');
-    await expect(recovery.recover({
-      organizationId: 'org_1', workItemId: 'sdr_1', ownerId: 'closer_2', disposition: 'won', currency: 'NGN',
-    })).rejects.toThrow('won recovery requires outcomeRevenue');
+    await expect(recovery.recover({ organizationId: 'org_1', workItemId: 'sdr_1', ownerId: 'closer_2', disposition: 'won', currency: 'NGN' })).rejects.toThrow('won recovery requires outcomeRevenue');
+    expect((await leadStore.get('lead_1'))?.state).toBe('booked');
+  });
+
+  it('rejects won recovery without leakage attribution context', async () => {
+    const { recovery, leadStore } = build('booked');
+    await expect(recovery.recover({ organizationId: 'org_1', workItemId: 'sdr_1', ownerId: 'closer_2', disposition: 'won', outcomeRevenue: 500000, currency: 'NGN' })).rejects.toThrow('won recovery requires leakageOpportunityId');
     expect((await leadStore.get('lead_1'))?.state).toBe('booked');
   });
 
   it('rejects cross-tenant recovery', async () => {
     const { recovery } = build('qualified');
-    await expect(recovery.recover({ organizationId: 'org_2', workItemId: 'sdr_1', ownerId: 'sdr_7', disposition: 'connected' }))
-      .rejects.toThrow('SDR work item not found');
+    await expect(recovery.recover({ organizationId: 'org_2', workItemId: 'sdr_1', ownerId: 'sdr_7', disposition: 'connected' })).rejects.toThrow('SDR work item not found');
   });
 });
