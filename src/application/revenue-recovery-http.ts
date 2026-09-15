@@ -8,7 +8,7 @@ export interface RevenueRecoveryHttpDependencies {
   controlPlane: (organizationId: string) => Promise<unknown>;
 }
 
-/** HTTP boundary for manager/SDR recovery actions. Tenant comes only from auth context. */
+/** HTTP boundary for manager/SDR recovery actions. Tenant and owner come only from auth context. */
 export async function handleRevenueRecovery(
   req: Request & { context?: AuthenticatedRequestContext },
   res: Response,
@@ -19,10 +19,11 @@ export async function handleRevenueRecovery(
     const context = req.context;
     requireRole(context, 'agent');
 
+    const { ownerId: _ignoredOwnerId, organizationId: _ignoredOrganizationId, ...body } = req.body ?? {};
     const result = await dependencies.recovery.recover({
-      ...req.body,
+      ...body,
       organizationId: context.tenantId,
-      ownerId: String(req.body?.ownerId || context.userId),
+      ownerId: context.userId,
     });
 
     return res.json({
