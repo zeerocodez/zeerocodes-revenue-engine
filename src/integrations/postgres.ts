@@ -21,6 +21,20 @@ export class PostgresDatabase {
   }
 
   runRequestContext(tenantId:string,client:PoolClient,next:()=>void):void{requestDbContext.run({client,tenantId},next);}
+
+  /** Runs work atomically. Inside an existing request transaction, a savepoint
+   * prevents a failed revenue recovery from partially committing its writes. */
+  async withTransaction<T>(work:(client:PoolClient)=>Promise<T>):Promise<T>{
+    const context=requestDbContext.getStore();
+    if(context){
+      const savepoint=`recovery_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+      await context.client.query(`SAVEPOINT ${savepoint}`);
+      try{const result=await work(context.client);await context.client.query(`RELEASE SAVEPOINT ${savepoint}`);return result;}
+      catch(error){try{await context.client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);}finally{await context.client.query(`RELEASE SAVEPOINT ${savepoint}`);}throw error;}
+    }
+    return this.withTenant('transaction',work);
+  }
+
   async withTenant<T>(tenantId:string,work:(client:PoolClient)=>Promise<T>):Promise<T>{if(!tenantId.trim())throw new Error('Tenant context is required');const client=await this.pool.connect();try{await client.query('BEGIN');await client.query("SELECT set_config('app.tenant_id', $1, true)",[tenantId]);const result=await work(client);await client.query('COMMIT');return result;}catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}}
   async close():Promise<void>{await this.pool.end();}
 }
