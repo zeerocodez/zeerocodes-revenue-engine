@@ -16,26 +16,17 @@ describe('lifecycle audit', () => {
 
   it('flags won without explicit win evidence', () => {
     const result = auditLifecycleEvent({
-      ...base,
-      id: 'evt-2',
-      fromState: 'booked',
-      toState: 'won',
-      metadata: {},
+      ...base, id: 'evt-2', fromState: 'booked', toState: 'won', metadata: {},
     });
     expect(result.issues.map((issue) => issue.code)).toContain('won-without-win-evidence');
   });
 
   it('accepts valid booked and won events with evidence', () => {
     const booked = auditLifecycleEvent({
-      ...base,
-      metadata: { appointmentId: 'appt-1' },
+      ...base, metadata: { appointmentStatus: 'confirmed' },
     });
     const won = auditLifecycleEvent({
-      ...base,
-      id: 'evt-3',
-      fromState: 'booked',
-      toState: 'won',
-      metadata: { outcome: 'won' },
+      ...base, id: 'evt-3', fromState: 'booked', toState: 'won', metadata: { outcome: 'won' },
     });
     expect(booked.valid).toBe(true);
     expect(won.valid).toBe(true);
