@@ -44,6 +44,12 @@ export class RevenueRecoveryService {
     if (!input.organizationId) throw new Error('organizationId is required');
     if (!input.ownerId) throw new Error('ownerId is required');
 
+    const revenueAmount = Math.max(0, Math.round(input.outcomeRevenue ?? 0));
+    if (input.disposition === 'won') {
+      if (revenueAmount <= 0) throw new Error('won recovery requires outcomeRevenue');
+      if (!input.currency) throw new Error('won recovery requires currency');
+    }
+
     const queue = await this.queue.queue(input.organizationId, input.now);
     const item = queue.items.find((candidate) => candidate.id === input.workItemId);
     if (!item) throw new Error('SDR work item not found or already completed');
@@ -67,17 +73,14 @@ export class RevenueRecoveryService {
 
     let revenueRecorded = false;
     let duplicateRevenue = false;
-    const revenueAmount = Math.max(0, Math.round(input.outcomeRevenue ?? current.outcomeRevenue ?? 0));
 
     if (input.disposition === 'won') {
-      if (revenueAmount <= 0) throw new Error('won recovery requires outcomeRevenue');
-      if (!input.currency) throw new Error('won recovery requires currency');
       const recording = await this.revenueRecordingService.record({
         organizationId: input.organizationId,
         leadId: current.leadId,
         attributionType: 'recovered',
         amount: revenueAmount,
-        currency: input.currency,
+        currency: input.currency!,
         ownerId: input.ownerId,
         recordedAt: input.now,
         evidence: 'won-outcome',
