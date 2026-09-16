@@ -1,0 +1,24 @@
+# Node & Build Outputs
+node_modules/
+dist/
+build/
+*.log
+
+# Historical repos context
+lead-zero-main/
+zeerocodes-main/
+Zeerocodes_Revenue_Growth_Engine_PRD_SRS_User_Flows.pdf
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Vitest coverage
+coverage/
