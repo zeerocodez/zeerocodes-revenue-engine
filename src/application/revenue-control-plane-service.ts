@@ -2,6 +2,7 @@ import type { RevenueIntelligenceResult } from './revenue-intelligence-service';
 import type { SdrPerformanceResult } from './sdr-performance-service';
 import { buildRevenueControlPlane, type RevenueControlPlaneSnapshot } from '../domain/revenue-control-plane';
 import type { SdrWorkItem } from '../domain/sdr-work-item';
+import type { RevenueLeakageOpportunity } from '../domain/revenue-leakage';
 
 export interface RevenueControlPlaneServiceInput {
   organizationId: string;
@@ -9,6 +10,7 @@ export interface RevenueControlPlaneServiceInput {
   workItems: SdrWorkItem[];
   performance: SdrPerformanceResult[];
   managerEscalationCount?: number;
+  leakageOpportunities?: RevenueLeakageOpportunity[];
   now?: string;
 }
 
@@ -19,6 +21,9 @@ export class RevenueControlPlaneService {
 
     const invalidItem = input.workItems.find((item) => item.organizationId !== input.organizationId);
     if (invalidItem) throw new Error('Tenant access denied');
+
+    const invalidLeak = input.leakageOpportunities?.find((leak) => leak.organizationId !== input.organizationId);
+    if (invalidLeak) throw new Error('Tenant access denied');
 
     return buildRevenueControlPlane(input);
   }

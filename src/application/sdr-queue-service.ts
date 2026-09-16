@@ -3,6 +3,9 @@ import { createSdrWorkItem, type SdrWorkItem, type SdrWorkItemInput } from '../d
 export interface SdrWorkItemStore {
   list(organizationId: string): Promise<SdrWorkItem[]>;
   save(item: SdrWorkItem): Promise<void>;
+  getSdrWorkItem?(organizationId: string, id: string): Promise<SdrWorkItem | null>;
+  claimSdrWorkItemAtomic?(organizationId: string, id: string, ownerId: string, claimedAt?: string): Promise<SdrWorkItem | null>;
+  completeSdrWorkItem?(organizationId: string, id: string, disposition: string, outcomeRevenue?: number, completedBy?: string, completedAt?: string): Promise<SdrWorkItem | null>;
 }
 
 export interface SdrQueueSnapshot {
@@ -22,6 +25,8 @@ export class SdrQueueService {
   }
 
   async queue(organizationId: string, now = new Date().toISOString()): Promise<SdrQueueSnapshot> {
+    if (!organizationId?.trim()) throw new Error('organizationId is required');
+
     const items = (await this.store.list(organizationId))
       .filter((item) => item.status === 'open' || item.status === 'claimed')
       .sort((a, b) => {
@@ -41,7 +46,22 @@ export class SdrQueueService {
     };
   }
 
-  async claim(organizationId: string, itemId: string, ownerId: string): Promise<SdrWorkItem> {
+  async claim(organizationId: string, itemId: string, ownerId: string, now = new Date().toISOString()): Promise<SdrWorkItem> {
+    if (!organizationId?.trim()) throw new Error('organizationId is required');
+    if (!itemId?.trim()) throw new Error('itemId is required');
+    if (!ownerId?.trim()) throw new Error('ownerId is required');
+
+    if (this.store.claimSdrWorkItemAtomic) {
+      const claimed = await this.store.claimSdrWorkItemAtomic(organizationId, itemId, ownerId, now);
+      if (!claimed) {
+        const item = this.store.getSdrWorkItem ? await this.store.getSdrWorkItem(organizationId, itemId) : null;
+        if (!item) throw new Error('SDR work item not found');
+        if (item.organizationId !== organizationId) throw new Error('Tenant access denied');
+        throw new Error('SDR work item is not open');
+      }
+      return claimed;
+    }
+
     const items = await this.store.list(organizationId);
     const item = items.find((candidate) => candidate.id === itemId);
     if (!item) throw new Error('SDR work item not found');
@@ -49,11 +69,27 @@ export class SdrQueueService {
     if (item.status !== 'open') throw new Error('SDR work item is not open');
     item.status = 'claimed';
     item.ownerId = ownerId;
+    item.claimedAt = now;
     await this.store.save(item);
     return item;
   }
 
-  async complete(organizationId: string, itemId: string, disposition: string): Promise<SdrWorkItem> {
+  async complete(
+    organizationId: string,
+    itemId: string,
+    disposition: string,
+    completedBy?: string,
+    outcomeRevenue?: number,
+    now = new Date().toISOString(),
+  ): Promise<SdrWorkItem> {
+    if (!organizationId?.trim()) throw new Error('organizationId is required');
+    if (!itemId?.trim()) throw new Error('itemId is required');
+
+    if (this.store.completeSdrWorkItem) {
+      const completed = await this.store.completeSdrWorkItem(organizationId, itemId, disposition, outcomeRevenue, completedBy, now);
+      if (completed) return completed;
+    }
+
     const items = await this.store.list(organizationId);
     const item = items.find((candidate) => candidate.id === itemId);
     if (!item) throw new Error('SDR work item not found');
@@ -61,6 +97,10 @@ export class SdrQueueService {
     if (!item.script || !item.dispositionOptions.includes(disposition as never)) throw new Error('Invalid disposition');
     if (item.status !== 'claimed' && item.status !== 'open') throw new Error('SDR work item is not active');
     item.status = 'completed';
+    item.disposition = disposition as any;
+    item.outcomeRevenue = outcomeRevenue;
+    item.completedBy = completedBy;
+    item.completedAt = now;
     item.recommendedAction = `Completed with disposition: ${disposition}`;
     await this.store.save(item);
     return item;
