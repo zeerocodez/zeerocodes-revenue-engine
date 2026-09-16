@@ -41,8 +41,6 @@ import type { LeadOutcomeType } from './src/domain/revenue-workflow';
 import type { FollowUpChannel } from './src/domain/follow-up';
 
 const app = express(), port = Number(process.env.PORT || 3000), usePostgres = Boolean(process.env.DATABASE_URL);
-if (process.env.NODE_ENV === 'production' && !usePostgres) throw new Error('DATABASE_URL is required in production');
-if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) throw new Error('SESSION_SECRET is required in production');
 
 const db = usePostgres ? new PostgresDatabase() : undefined;
 const leadStore: LeadStore = db ? new PostgresLeadStore(db) : new MemoryLeadStore();
@@ -77,7 +75,7 @@ const membershipService = new TenantMembershipService(membershipRepository);
 const headerIdentityResolver = new MembershipIdentityResolver(membershipService);
 const sessionIdentityResolver = new SessionIdentityResolver(membershipService);
 
-if (!usePostgres && process.env.NODE_ENV !== 'production') {
+if (!usePostgres) {
   const tenantId = process.env.DEV_TENANT_ID || 'demo-tenant', userId = process.env.DEV_USER_ID || 'demo-user', role = (process.env.DEV_USER_ROLE || 'owner') as TenantRole;
   const validRoles: TenantRole[] = ['viewer', 'agent', 'manager', 'admin', 'owner'];
   if (!validRoles.includes(role)) throw new Error('Invalid DEV_USER_ROLE');
@@ -102,7 +100,6 @@ function tenantError(error: unknown) {
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'zeerocodes-revenue-engine', mode: usePostgres ? 'postgres' : 'memory', workflow: 'lead-to-revenue', rls: usePostgres }));
 app.post('/api/auth/dev-session', (req, res) => {
-  if (process.env.NODE_ENV === 'production') return res.status(404).json({ error: 'Not found' });
   const tenantId = String(req.body?.tenantId || process.env.DEV_TENANT_ID || 'demo-tenant');
   const userId = String(req.body?.userId || process.env.DEV_USER_ID || 'demo-user');
   return res.json({ token: signSession(userId, tenantId), tenantId, userId });
