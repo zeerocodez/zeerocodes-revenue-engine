@@ -2,11 +2,13 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   Activity,
   AlertTriangle,
+  ArrowLeft,
   ArrowRight,
   Bot,
   CheckCircle2,
   CircleDollarSign,
   Flame,
+  Globe,
   GitBranch,
   Inbox,
   LayoutDashboard,
@@ -20,6 +22,7 @@ import LeadWorkspace from './features/revenue-engine/LeadWorkspace';
 import SdrQueueWorkspace from './features/revenue-engine/SdrQueueWorkspace';
 import RevenueAttributionWorkspace from './features/revenue-engine/RevenueAttributionWorkspace';
 import SettingsWorkspace from './features/revenue-engine/SettingsWorkspace';
+import LandingPage from './features/landing/LandingPage';
 import type { RevenueControlPlaneSnapshot } from './domain/revenue-control-plane';
 import { fetchRevenueControlPlane } from './lib/revenue-control-plane-api';
 import { clearSession, sessionTenant } from './lib/api';
@@ -33,7 +36,15 @@ const nav = [
 ] as const;
 
 export default function App() {
-  const [active, setActive] = useState<string>('Overview');
+  const [active, setActive] = useState<string>(() => {
+    const hash = window.location.hash.replace('#', '').toLowerCase();
+    if (hash === 'overview') return 'Overview';
+    if (hash === 'leads') return 'Leads';
+    if (hash === 'sdr-queue' || hash === 'sdr') return 'SDR Queue';
+    if (hash === 'revenue') return 'Revenue';
+    if (hash === 'settings') return 'Settings';
+    return 'Landing';
+  });
   const [control, setControl] = useState<RevenueControlPlaneSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,31 +67,72 @@ export default function App() {
   }
 
   useEffect(() => {
-    void loadControlPlane();
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '').toLowerCase();
+      if (hash === 'landing' || hash === '') setActive('Landing');
+      else if (hash === 'overview') setActive('Overview');
+      else if (hash === 'leads') setActive('Leads');
+      else if (hash === 'sdr-queue' || hash === 'sdr') setActive('SDR Queue');
+      else if (hash === 'revenue') setActive('Revenue');
+      else if (hash === 'settings') setActive('Settings');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+  const switchTab = (tab: string) => {
+    setActive(tab);
+    window.location.hash = tab === 'Landing' ? '' : tab.toLowerCase().replace(' ', '-');
+  };
+
+  if (active === 'Landing') {
+    return (
+      <LandingPage
+        onLaunchWorkspace={(tab = 'Overview') => {
+          switchTab(tab);
+        }}
+      />
+    );
+  }
+
+  useEffect(() => {
+    if (active !== 'Landing') {
+      void loadControlPlane();
+    }
+  }, [active]);
 
   return (
     <div className="min-h-screen bg-[#080b14] text-slate-100">
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-800 bg-[#0b0f1a] p-5 lg:block">
-        <div className="mb-8 flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-500 font-black shadow-lg shadow-indigo-500/20">
-            Z
-          </div>
-          <div>
-            <div className="font-bold">Zeerocodes</div>
-            <div className="text-xs text-indigo-400">Revenue Engine</div>
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-500 font-black shadow-lg shadow-indigo-500/20">
+              Z
+            </div>
+            <div>
+              <div className="font-bold">Zeerocodes</div>
+              <div className="text-xs text-indigo-400">Revenue Engine</div>
+            </div>
           </div>
         </div>
+
+        <button
+          onClick={() => switchTab('Landing')}
+          className="mb-4 flex w-full items-center gap-2 rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-xs font-semibold text-slate-400 hover:border-indigo-500/40 hover:text-indigo-300 transition"
+        >
+          <ArrowLeft size={14} />
+          Back to Public Page
+        </button>
 
         <nav className="space-y-1">
           {nav.map(([label, Icon]) => (
             <button
               key={label}
-              onClick={() => setActive(label)}
+              onClick={() => switchTab(label)}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                 active === label
-                  ? 'bg-indigo-500/15 text-indigo-300 shadow-sm'
+                  ? 'bg-indigo-500/15 text-indigo-300 shadow-sm font-semibold'
                   : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
               }`}
             >
@@ -111,6 +163,14 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => switchTab('Landing')}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-800 px-3 py-1.5 text-xs font-medium text-slate-400 hover:bg-slate-800 hover:text-white transition"
+            >
+              <Globe size={13} />
+              Public Landing
+            </button>
+
             {control && (
               <span
                 className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider ${
@@ -138,8 +198,8 @@ export default function App() {
               loading={loading}
               error={error}
               onRefresh={() => loadControlPlane(true)}
-              onOpenSdrQueue={() => setActive('SDR Queue')}
-              onOpenLeads={() => setActive('Leads')}
+              onOpenSdrQueue={() => switchTab('SDR Queue')}
+              onOpenLeads={() => switchTab('Leads')}
             />
           )}
 
