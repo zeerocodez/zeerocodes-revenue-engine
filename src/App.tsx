@@ -22,6 +22,7 @@ import LeadWorkspace from './features/revenue-engine/LeadWorkspace';
 import SdrQueueWorkspace from './features/revenue-engine/SdrQueueWorkspace';
 import RevenueAttributionWorkspace from './features/revenue-engine/RevenueAttributionWorkspace';
 import SettingsWorkspace from './features/revenue-engine/SettingsWorkspace';
+import LeadSourcesWorkspace from './features/revenue-engine/LeadSourcesWorkspace';
 import LandingPage from './features/landing/LandingPage';
 import type { RevenueControlPlaneSnapshot } from './domain/revenue-control-plane';
 import { fetchRevenueControlPlane } from './lib/revenue-control-plane-api';
@@ -30,6 +31,7 @@ import { clearSession, sessionTenant } from './lib/api';
 const nav = [
   ['Overview', LayoutDashboard],
   ['Leads', Inbox],
+  ['Lead Sources', Globe],
   ['SDR Queue', GitBranch],
   ['Revenue', CircleDollarSign],
   ['Settings', Settings2],
@@ -40,6 +42,7 @@ export default function App() {
     const hash = window.location.hash.replace('#', '').toLowerCase();
     if (hash === 'overview') return 'Overview';
     if (hash === 'leads') return 'Leads';
+    if (hash === 'sources' || hash === 'lead-sources') return 'Lead Sources';
     if (hash === 'sdr-queue' || hash === 'sdr') return 'SDR Queue';
     if (hash === 'revenue') return 'Revenue';
     if (hash === 'settings') return 'Settings';
@@ -204,6 +207,8 @@ export default function App() {
           )}
 
           {active === 'Leads' && <LeadWorkspace />}
+
+          {active === 'Lead Sources' && <LeadSourcesWorkspace />}
 
           {active === 'SDR Queue' && <SdrQueueWorkspace />}
 

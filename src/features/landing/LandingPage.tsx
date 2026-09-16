@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type FormEvent } from 'react';
 import {
   ArrowRight,
   Bot,
@@ -19,7 +19,11 @@ import {
   TrendingUp,
   Users,
   Zap,
+  X,
+  Send,
+  FileSearch,
 } from 'lucide-react';
+import { apiFetch, readJsonOrThrow } from '../../lib/api';
 
 interface LandingPageProps {
   onLaunchWorkspace: (tab?: string) => void;
@@ -30,6 +34,48 @@ export default function LandingPage({ onLaunchWorkspace }: LandingPageProps) {
   const [monthlyLeads, setMonthlyLeads] = useState<number>(300);
   const [avgDealValue, setAvgDealValue] = useState<number>(150000); // NGN
   const [leakageRate, setLeakageRate] = useState<number>(35); // 35% estimated dropoff
+
+  // Audit Request State
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [auditBusy, setAuditBusy] = useState(false);
+  const [auditSuccess, setAuditSuccess] = useState<string | null>(null);
+  const [auditError, setAuditError] = useState<string | null>(null);
+
+  async function handleAuditSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAuditBusy(true);
+    setAuditSuccess(null);
+    setAuditError(null);
+    const form = new FormData(event.currentTarget);
+    const payload = Object.fromEntries(form.entries());
+    try {
+      await readJsonOrThrow(
+        await apiFetch('/api/public/audit-requests', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name: payload.name,
+            business: payload.business,
+            email: payload.email,
+            phone: payload.phone,
+            website: payload.website || undefined,
+            monthlyLeadVolume: payload.monthlyLeadVolume,
+            currentCrm: payload.currentCrm || undefined,
+            biggestSalesBottleneck: payload.biggestSalesBottleneck,
+            averageDealValue: payload.averageDealValue ? Number(payload.averageDealValue) : undefined,
+            whereLeadsAreLost: payload.whereLeadsAreLost || undefined,
+          }),
+        }),
+        'Audit submission failed'
+      );
+      setAuditSuccess('Your revenue audit request has been received! Our senior architecture team will review your funnel.');
+      event.currentTarget.reset();
+    } catch (e) {
+      setAuditError(e instanceof Error ? e.message : 'Audit submission failed');
+    } finally {
+      setAuditBusy(false);
+    }
+  }
 
   const calculation = useMemo(() => {
     const totalPipelineValue = monthlyLeads * avgDealValue;
@@ -72,6 +118,13 @@ export default function LandingPage({ onLaunchWorkspace }: LandingPageProps) {
 
           <div className="flex items-center gap-3">
             <button
+              onClick={() => setShowAuditModal(true)}
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-4 py-2.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 transition"
+            >
+              <FileSearch size={14} />
+              Request Audit
+            </button>
+            <button
               onClick={() => onLaunchWorkspace('Overview')}
               className="group flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition"
             >
@@ -110,6 +163,12 @@ export default function LandingPage({ onLaunchWorkspace }: LandingPageProps) {
               className="flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-indigo-500 to-indigo-600 px-7 py-4 text-sm font-bold text-white shadow-xl shadow-indigo-500/30 hover:from-indigo-400 hover:to-indigo-500 transition"
             >
               Open Revenue Control Plane <ArrowRight size={16} />
+            </button>
+            <button
+              onClick={() => setShowAuditModal(true)}
+              className="flex items-center gap-2 rounded-2xl border border-indigo-500/40 bg-indigo-500/10 px-7 py-4 text-sm font-bold text-indigo-200 hover:bg-indigo-500/20 transition"
+            >
+              <FileSearch size={16} /> Request Revenue Leak Audit
             </button>
             <button
               onClick={() => onLaunchWorkspace('SDR Queue')}
@@ -512,6 +571,9 @@ export default function LandingPage({ onLaunchWorkspace }: LandingPageProps) {
             <button onClick={() => onLaunchWorkspace('Leads')} className="hover:text-white transition">
               Leads
             </button>
+            <button onClick={() => onLaunchWorkspace('Lead Sources')} className="hover:text-white transition">
+              Lead Sources
+            </button>
             <button onClick={() => onLaunchWorkspace('SDR Queue')} className="hover:text-white transition">
               SDR Queue
             </button>
@@ -524,6 +586,186 @@ export default function LandingPage({ onLaunchWorkspace }: LandingPageProps) {
           </div>
         </div>
       </footer>
+
+      {/* Revenue Leak Audit Modal */}
+      {showAuditModal && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/80 p-4 backdrop-blur-md overflow-y-auto">
+          <div className="card my-8 max-h-[90vh] w-full max-w-2xl overflow-y-auto p-6 sm:p-8">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-indigo-400">
+                  Zeerocodes Diagnostic Request
+                </div>
+                <h3 className="mt-1 text-2xl font-bold text-white">
+                  Request a Free Revenue Leak Audit
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                  Our revenue operations engineers will analyze your conversion drop-offs, speed-to-lead SLAs, and pipeline leakage points to deliver a tailored recovery roadmap.
+                </p>
+              </div>
+              <button
+                aria-label="Close"
+                onClick={() => {
+                  setShowAuditModal(false);
+                  setAuditSuccess(null);
+                  setAuditError(null);
+                }}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {auditSuccess ? (
+              <div className="mt-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center space-y-3">
+                <CheckCircle2 size={36} className="mx-auto text-emerald-400" />
+                <h4 className="text-lg font-bold text-white">Diagnostic Request Received</h4>
+                <p className="text-sm text-emerald-200">{auditSuccess}</p>
+                <button
+                  onClick={() => {
+                    setShowAuditModal(false);
+                    setAuditSuccess(null);
+                  }}
+                  className="mt-4 rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 transition"
+                >
+                  Done
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={(e) => void handleAuditSubmit(e)} className="mt-6 space-y-4">
+                {auditError && (
+                  <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs text-rose-300">
+                    {auditError}
+                  </div>
+                )}
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Full Name *
+                    <input
+                      name="name"
+                      required
+                      placeholder="e.g. Alex Rivera"
+                      className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Company / Business Name *
+                    <input
+                      name="business"
+                      required
+                      placeholder="e.g. Apex Advisory Ltd"
+                      className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                    />
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Work Email *
+                    <input
+                      name="email"
+                      type="email"
+                      required
+                      placeholder="alex@apexadvisory.com"
+                      className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Phone / WhatsApp *
+                    <input
+                      name="phone"
+                      required
+                      placeholder="+234 800 000 0000"
+                      className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                    />
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Website (optional)
+                    <input
+                      name="website"
+                      placeholder="https://apexadvisory.com"
+                      className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Current CRM (optional)
+                    <input
+                      name="currentCrm"
+                      placeholder="e.g. HubSpot, Zoho, Sheets"
+                      className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                    />
+                  </label>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Monthly Inbound Lead Volume *
+                    <select
+                      name="monthlyLeadVolume"
+                      required
+                      defaultValue="50–200 leads/mo"
+                      className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                    >
+                      <option value="Under 50 leads/mo">Under 50 leads/mo</option>
+                      <option value="50–200 leads/mo">50–200 leads/mo</option>
+                      <option value="200–1,000 leads/mo">200–1,000 leads/mo</option>
+                      <option value="1,000+ leads/mo">1,000+ leads/mo</option>
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-slate-300">
+                    Average Deal Value (₦)
+                    <input
+                      name="averageDealValue"
+                      type="number"
+                      min="0"
+                      placeholder="150000"
+                      className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                    />
+                  </label>
+                </div>
+
+                <label className="text-xs font-semibold text-slate-300 block">
+                  Biggest Sales / Revenue Bottleneck *
+                  <select
+                    name="biggestSalesBottleneck"
+                    required
+                    defaultValue="Slow response to inbound inquiries"
+                    className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="Slow response to inbound inquiries">Slow response time / SLA dropoffs</option>
+                    <option value="Leads fall through cracks / unworked">Unworked leads / inconsistent follow-ups</option>
+                    <option value="Unqualified bookings wasting closer time">Unqualified meetings wasting sales rep time</option>
+                    <option value="Stalled deals with no follow-up triggers">Deals stalling in quote or proposal phase</option>
+                    <option value="No attribution from marketing spend to cash">No visibility into which lead sources actually close</option>
+                  </select>
+                </label>
+
+                <label className="text-xs font-semibold text-slate-300 block">
+                  Where do you suspect leads are getting lost? (optional)
+                  <textarea
+                    name="whereLeadsAreLost"
+                    rows={3}
+                    placeholder="e.g. In WhatsApp chats when reps get overwhelmed, or after the first quote is sent."
+                    className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={auditBusy}
+                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition disabled:opacity-50"
+                >
+                  {auditBusy ? 'Submitting Diagnostic Request…' : 'Submit Free Revenue Audit Request'} <Send size={16} />
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

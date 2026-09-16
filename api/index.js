@@ -2956,11 +2956,186 @@ async function runPostgresMigrations(db2) {
   return completed;
 }
 
+// src/domain/audit-request.ts
+function validateAuditRequest(input) {
+  const required = [
+    ["name", "name"],
+    ["business", "business"],
+    ["email", "email"],
+    ["phone", "phone"],
+    ["monthlyLeadVolume", "monthly lead volume"],
+    ["biggestSalesBottleneck", "biggest sales bottleneck"]
+  ];
+  for (const [key, label] of required) {
+    const value = input[key];
+    if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required`);
+  }
+  if (!/^\S+@\S+\.\S+$/.test(input.email.trim())) throw new Error("valid email is required");
+  if (input.averageDealValue !== void 0 && (!Number.isFinite(input.averageDealValue) || input.averageDealValue < 0)) {
+    throw new Error("average deal value must be a non-negative number");
+  }
+}
+function createAuditRequest(input, id3, now = (/* @__PURE__ */ new Date()).toISOString()) {
+  validateAuditRequest(input);
+  return {
+    ...input,
+    id: id3,
+    name: input.name.trim(),
+    business: input.business.trim(),
+    email: input.email.trim().toLowerCase(),
+    phone: input.phone.trim(),
+    createdAt: now,
+    status: "new"
+  };
+}
+
+// src/domain/lead-source.ts
+function splitCsvLine(line) {
+  const values = [];
+  let current = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (char === '"') {
+      if (quoted && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char === "," && !quoted) {
+      values.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  values.push(current.trim());
+  return values;
+}
+function parseLeadCsv(csv) {
+  const lines = csv.replace(/^\uFEFF/, "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const headers = splitCsvLine(lines[0]).map(
+    (header) => header.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "")
+  );
+  return lines.slice(1).map(
+    (line) => Object.fromEntries(
+      splitCsvLine(line).map((value, index) => [headers[index] ?? `column_${index + 1}`, value])
+    )
+  );
+}
+function rowToLeadInput(row, organizationId, source = "csv-import") {
+  const name = row.name || row.full_name || [row.first_name, row.last_name].filter(Boolean).join(" ");
+  const serviceType = row.service_type || row.product || row.interest || "General enquiry";
+  const dealVal = Number(row.estimated_deal_value || row.deal_value || row.value || 0);
+  return {
+    organizationId,
+    name: name || "Unnamed Lead",
+    email: row.email?.trim() || void 0,
+    phone: (row.phone || row.phone_number || row.mobile)?.trim() || void 0,
+    source,
+    campaignId: row.campaign_id || row.campaign || void 0,
+    consent: row.consent !== "false" && row.consent !== "0",
+    profile: {
+      serviceFit: Boolean(serviceType),
+      needConfirmed: row.need_confirmed !== "false",
+      decisionMaker: row.decision_maker === "true" || row.decision_maker === "1",
+      budget: Number.isFinite(dealVal) && dealVal > 0 ? dealVal : void 0
+    },
+    commercial: {
+      estimatedDealValue: Number.isFinite(dealVal) ? dealVal : 0,
+      currency: row.currency || "NGN",
+      serviceType
+    },
+    metadata: { importedRow: row }
+  };
+}
+
+// src/integrations/memory-audit-requests.ts
+var MemoryAuditRequestStore = class {
+  requests = [];
+  async create(request) {
+    this.requests.unshift(structuredClone(request));
+  }
+  async list() {
+    return structuredClone(this.requests);
+  }
+  async findById(id3) {
+    const found = this.requests.find((r) => r.id === id3);
+    return found ? structuredClone(found) : null;
+  }
+};
+
+// src/integrations/postgres-audit-requests.ts
+var PostgresAuditRequestStore = class {
+  constructor(db2) {
+    this.db = db2;
+  }
+  async create(request) {
+    await this.db.query(
+      `insert into audit_requests (
+        id, name, business, email, phone, website, monthly_lead_volume,
+        current_crm, biggest_sales_bottleneck, average_deal_value,
+        where_leads_are_lost, status, created_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      on conflict (id) do nothing`,
+      [
+        request.id,
+        request.name,
+        request.business,
+        request.email,
+        request.phone,
+        request.website ?? null,
+        request.monthlyLeadVolume,
+        request.currentCrm ?? null,
+        request.biggestSalesBottleneck,
+        request.averageDealValue ?? null,
+        request.whereLeadsAreLost ?? null,
+        request.status,
+        request.createdAt
+      ]
+    );
+  }
+  async list() {
+    const result = await this.db.query(
+      `select * from audit_requests order by created_at desc`
+    );
+    return result.rows.map((row) => this.mapRow(row));
+  }
+  async findById(id3) {
+    const result = await this.db.query(
+      `select * from audit_requests where id = $1`,
+      [id3]
+    );
+    if (!result.rows.length) return null;
+    return this.mapRow(result.rows[0]);
+  }
+  mapRow(row) {
+    return {
+      id: row.id,
+      name: row.name,
+      business: row.business,
+      email: row.email,
+      phone: row.phone,
+      website: row.website ?? void 0,
+      monthlyLeadVolume: row.monthly_lead_volume,
+      currentCrm: row.current_crm ?? void 0,
+      biggestSalesBottleneck: row.biggest_sales_bottleneck,
+      averageDealValue: row.average_deal_value ? Number(row.average_deal_value) : void 0,
+      whereLeadsAreLost: row.where_leads_are_lost ?? void 0,
+      status: row.status,
+      createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at.toISOString()
+    };
+  }
+};
+
 // server.ts
 var app = express();
 var port = Number(process.env.PORT || 3e3);
 var usePostgres = Boolean(process.env.DATABASE_URL);
 var db = usePostgres ? new PostgresDatabase() : void 0;
+var auditRequestStore = db ? new PostgresAuditRequestStore(db) : new MemoryAuditRequestStore();
 var leadStore = db ? new PostgresLeadStore(db) : new MemoryLeadStore();
 var leadEventStore = db ? new PostgresLeadEventStore(db) : new MemoryLeadEventStore();
 var tenantEventRepository = new TenantLeadEventRepositoryImpl(leadEventStore);
@@ -3402,6 +3577,57 @@ app.post("/api/webhooks/deliver", async (req, res) => {
     return res.json({ delivered: await webhookDispatcher.deliverPending(Number(req.body?.limit || 20)) });
   } catch (e) {
     return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : "Unable to deliver webhooks" });
+  }
+});
+app.post("/api/public/audit-requests", async (req, res) => {
+  try {
+    const input = req.body;
+    const auditRequest = createAuditRequest(input, `audit_${randomUUID5()}`);
+    await auditRequestStore.create(auditRequest);
+    return res.status(201).json({ auditRequest, message: "Audit request received successfully" });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Invalid audit request submission" });
+  }
+});
+app.get("/api/public/audit-requests", async (_req, res) => {
+  try {
+    const requests = await auditRequestStore.list();
+    return res.json({ auditRequests: requests });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Failed to fetch audit requests" });
+  }
+});
+app.post("/api/leads/import-csv", async (req, res) => {
+  try {
+    const c = contextOf(req);
+    requireRole(c, "agent");
+    const { csv, source = "csv-import" } = req.body || {};
+    if (typeof csv !== "string" || !csv.trim()) {
+      return res.status(400).json({ error: "Valid CSV string is required" });
+    }
+    const rows = parseLeadCsv(csv);
+    let accepted = 0;
+    let rejected = 0;
+    const errors = [];
+    for (let i = 0; i < rows.length; i++) {
+      try {
+        const leadInput = rowToLeadInput(rows[i], c.tenantId, source);
+        await revenueEngine.intake(leadInput);
+        accepted++;
+      } catch (err) {
+        rejected++;
+        errors.push({ row: i + 1, message: err instanceof Error ? err.message : "Intake failed" });
+      }
+    }
+    return res.json({
+      total: rows.length,
+      accepted,
+      rejected,
+      duplicates: 0,
+      errors
+    });
+  } catch (e) {
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : "Failed to import CSV" });
   }
 });
 if (!process.env.VERCEL) {

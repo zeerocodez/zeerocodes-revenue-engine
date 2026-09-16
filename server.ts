@@ -39,10 +39,15 @@ import type { LeadStore } from './src/application/revenue-engine-service';
 import type { LeadEventStore } from './src/domain/lead-events';
 import type { LeadOutcomeType } from './src/domain/revenue-workflow';
 import type { FollowUpChannel } from './src/domain/follow-up';
+import { createAuditRequest, type AuditRequestInput } from './src/domain/audit-request';
+import { parseLeadCsv, rowToLeadInput } from './src/domain/lead-source';
+import { MemoryAuditRequestStore, type AuditRequestStore } from './src/integrations/memory-audit-requests';
+import { PostgresAuditRequestStore } from './src/integrations/postgres-audit-requests';
 
 const app = express(), port = Number(process.env.PORT || 3000), usePostgres = Boolean(process.env.DATABASE_URL);
 
 const db = usePostgres ? new PostgresDatabase() : undefined;
+const auditRequestStore: AuditRequestStore = db ? new PostgresAuditRequestStore(db) : new MemoryAuditRequestStore();
 const leadStore: LeadStore = db ? new PostgresLeadStore(db) : new MemoryLeadStore();
 const leadEventStore: LeadEventStore = db ? new PostgresLeadEventStore(db) : new MemoryLeadEventStore();
 const tenantEventRepository = new TenantLeadEventRepositoryImpl(leadEventStore);
@@ -505,6 +510,62 @@ app.post('/api/webhooks/deliver', async (req: RequestWithContext, res) => {
     return res.json({ delivered: await webhookDispatcher.deliverPending(Number(req.body?.limit || 20)) });
   } catch (e) {
     return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Unable to deliver webhooks' });
+  }
+});
+
+app.post('/api/public/audit-requests', async (req, res) => {
+  try {
+    const input = req.body as AuditRequestInput;
+    const auditRequest = createAuditRequest(input, `audit_${randomUUID()}`);
+    await auditRequestStore.create(auditRequest);
+    return res.status(201).json({ auditRequest, message: 'Audit request received successfully' });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : 'Invalid audit request submission' });
+  }
+});
+
+app.get('/api/public/audit-requests', async (_req, res) => {
+  try {
+    const requests = await auditRequestStore.list();
+    return res.json({ auditRequests: requests });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to fetch audit requests' });
+  }
+});
+
+app.post('/api/leads/import-csv', async (req: RequestWithContext, res) => {
+  try {
+    const c = contextOf(req);
+    requireRole(c, 'agent');
+    const { csv, source = 'csv-import' } = (req.body || {}) as { csv?: string; source?: string };
+    if (typeof csv !== 'string' || !csv.trim()) {
+      return res.status(400).json({ error: 'Valid CSV string is required' });
+    }
+    const rows = parseLeadCsv(csv);
+    let accepted = 0;
+    let rejected = 0;
+    const errors: Array<{ row: number; message: string }> = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      try {
+        const leadInput = rowToLeadInput(rows[i], c.tenantId, source);
+        await revenueEngine.intake(leadInput);
+        accepted++;
+      } catch (err) {
+        rejected++;
+        errors.push({ row: i + 1, message: err instanceof Error ? err.message : 'Intake failed' });
+      }
+    }
+
+    return res.json({
+      total: rows.length,
+      accepted,
+      rejected,
+      duplicates: 0,
+      errors,
+    });
+  } catch (e) {
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Failed to import CSV' });
   }
 });
 
