@@ -6,7 +6,21 @@ class FakeDb {
   async query<T = any>(text: string): Promise<{ rows: T[] }> {
     this.queries.push(text);
     if (text.includes('with funnel')) {
-      return { rows: [{ leads: '10', contacted: '8', engaged: '6', qualified: '3', booked: '0', won: '0', revenue: '0', currency: 'NGN', attributed_revenue: '0', escalations: '1' }] as T[] };
+      return {
+        rows: [{
+          leads: '10',
+          contacted: '8',
+          engaged: '6',
+          qualified: '3',
+          booked: '0',
+          won: '0',
+          revenue: '0',
+          currency: 'NGN',
+          attributed_revenue: '0',
+          recovered_revenue: '0',
+          escalations: '1',
+        }] as T[],
+      };
     }
     return { rows: [] as T[] };
   }
@@ -23,7 +37,7 @@ describe('PostgresRevenueControlPlaneReader', () => {
     expect(snapshot.openManagerEscalations).toBe(1);
     expect(snapshot.status).toBe('watch');
     expect(snapshot.actions.map((action) => action.type)).toEqual(['manager-escalation', 'pipeline-leakage']);
-    expect(db.queries).toHaveLength(2);
+    expect(db.queries).toHaveLength(4); // funnel, sdr_work_items, revenue_leakage_opportunities, insert snapshot
   });
 
   it('rejects missing tenant context before querying', async () => {
