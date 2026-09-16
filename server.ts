@@ -527,10 +527,16 @@ async function start() {
   app.listen(port, () => console.log(`Zeerocodes Revenue Engine listening on ${port}`));
 }
 
-if (!process.env.VERCEL) {
+const isDirectExecution = typeof process.argv[1] === 'string' && (
+  process.argv[1].endsWith('server.ts') ||
+  process.argv[1].endsWith('server.cjs') ||
+  process.argv[1].endsWith('server.js')
+);
+
+if (isDirectExecution && !process.env.VERCEL) {
   void start();
 }
 
-export { app };
+export { app, start };
 export default app;
 
