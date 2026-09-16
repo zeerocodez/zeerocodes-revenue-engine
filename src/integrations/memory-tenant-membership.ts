@@ -10,7 +10,7 @@ export class MemoryTenantMembershipRepository implements TenantMembershipReposit
   }
 
   seedMembership(membership: TenantUser): void {
-    this.memberships.set(`${membership.id}:${membership.tenantId}`, structuredClone(membership));
+    this.memberships.set(`${membership.userId}:${membership.tenantId}`, structuredClone(membership));
   }
 
   async getUserMembership(userId: string, tenantId: string): Promise<TenantUser | null> {
