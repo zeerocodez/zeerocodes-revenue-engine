@@ -522,4 +522,10 @@ async function start() {
   app.listen(port, () => console.log(`Zeerocodes Revenue Engine listening on ${port}`));
 }
 
-void start();
+if (!process.env.VERCEL) {
+  void start();
+}
+
+export { app };
+export default app;
+
