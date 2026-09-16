@@ -22,7 +22,7 @@ import RevenueAttributionWorkspace from './features/revenue-engine/RevenueAttrib
 import SettingsWorkspace from './features/revenue-engine/SettingsWorkspace';
 import type { RevenueControlPlaneSnapshot } from './domain/revenue-control-plane';
 import { fetchRevenueControlPlane } from './lib/revenue-control-plane-api';
-import { sessionTenant } from './lib/api';
+import { clearSession, sessionTenant } from './lib/api';
 
 const nav = [
   ['Overview', LayoutDashboard],
@@ -39,9 +39,12 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const tenantId = sessionTenant() || 'demo-tenant';
 
-  async function loadControlPlane() {
+  async function loadControlPlane(forceRefresh = false) {
     setLoading(true);
     setError(null);
+    if (forceRefresh) {
+      clearSession();
+    }
     try {
       const snapshot = await fetchRevenueControlPlane();
       setControl(snapshot);
@@ -134,7 +137,7 @@ export default function App() {
               control={control}
               loading={loading}
               error={error}
-              onRefresh={loadControlPlane}
+              onRefresh={() => loadControlPlane(true)}
               onOpenSdrQueue={() => setActive('SDR Queue')}
               onOpenLeads={() => setActive('Leads')}
             />

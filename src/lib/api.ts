@@ -5,7 +5,6 @@ function isTokenValid(token: string): boolean {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return false;
-    // Decode base64url payload
     const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
       atob(base64)
@@ -21,14 +20,22 @@ function isTokenValid(token: string): boolean {
   }
 }
 
+export function clearSession(): void {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TENANT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export async function ensureDevelopmentSession(force = false): Promise<string | null> {
   const existing = localStorage.getItem(TOKEN_KEY);
   if (existing && isTokenValid(existing) && !force) {
     return existing;
   }
 
-  // Clear stale token
-  localStorage.removeItem(TOKEN_KEY);
+  clearSession();
 
   try {
     const response = await fetch('/api/auth/dev-session', {
@@ -71,8 +78,9 @@ export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {})
 
   const response = await fetch(input, { ...init, headers });
 
-  // If unauthorized due to token expiration, refresh token and retry once
+  // If unauthorized due to token expiration or invalid signature, refresh token and retry once
   if (response.status === 401) {
+    clearSession();
     const freshToken = await ensureDevelopmentSession(true);
     if (freshToken) {
       const retryHeaders = new Headers(init.headers);
