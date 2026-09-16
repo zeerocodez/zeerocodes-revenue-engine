@@ -30,7 +30,7 @@ export function signSession(userId: string, tenantId: string, secret?: string): 
       sub: userId,
       tenant_id: tenantId,
       iat: now,
-      exp: now + Number(process.env.SESSION_TTL_SECONDS ?? 86400),
+      exp: now + Number(process.env.SESSION_TTL_SECONDS ?? 604800), // Default: 7 days
     }),
   );
   const unsigned = `${header}.${payload}`;

@@ -1,9 +1,35 @@
 const TOKEN_KEY = 'zeerocodes.session';
 const TENANT_KEY = 'zeerocodes.tenant';
 
-export async function ensureDevelopmentSession(): Promise<string | null> {
+function isTokenValid(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    // Decode base64url payload
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(''),
+    );
+    const payload = JSON.parse(jsonPayload) as { exp?: number };
+    const nowSec = Math.floor(Date.now() / 1000);
+    return typeof payload.exp === 'number' && payload.exp > nowSec + 30;
+  } catch {
+    return false;
+  }
+}
+
+export async function ensureDevelopmentSession(force = false): Promise<string | null> {
   const existing = localStorage.getItem(TOKEN_KEY);
-  if (existing) return existing;
+  if (existing && isTokenValid(existing) && !force) {
+    return existing;
+  }
+
+  // Clear stale token
+  localStorage.removeItem(TOKEN_KEY);
+
   try {
     const response = await fetch('/api/auth/dev-session', {
       method: 'POST',
@@ -37,12 +63,25 @@ export function sessionTenant(): string | null {
 }
 
 export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
-  const token = await ensureDevelopmentSession();
+  let token = await ensureDevelopmentSession();
   const headers = new Headers(init.headers);
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  return fetch(input, { ...init, headers });
+
+  const response = await fetch(input, { ...init, headers });
+
+  // If unauthorized due to token expiration, refresh token and retry once
+  if (response.status === 401) {
+    const freshToken = await ensureDevelopmentSession(true);
+    if (freshToken) {
+      const retryHeaders = new Headers(init.headers);
+      retryHeaders.set('Authorization', `Bearer ${freshToken}`);
+      return fetch(input, { ...init, headers: retryHeaders });
+    }
+  }
+
+  return response;
 }
 
 export async function readJsonOrThrow<T = any>(res: Response, fallbackError: string): Promise<T> {

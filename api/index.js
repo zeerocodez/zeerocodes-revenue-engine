@@ -1661,7 +1661,8 @@ function signSession(userId, tenantId, secret) {
       sub: userId,
       tenant_id: tenantId,
       iat: now,
-      exp: now + Number(process.env.SESSION_TTL_SECONDS ?? 86400)
+      exp: now + Number(process.env.SESSION_TTL_SECONDS ?? 604800)
+      // Default: 7 days
     })
   );
   const unsigned = `${header}.${payload}`;
