@@ -1,13 +1,15 @@
 import type { RevenueIntelligenceResult } from '../application/revenue-intelligence-service';
 import type { SdrPerformanceResult } from '../application/sdr-performance-service';
 import type { SdrWorkItem } from './sdr-work-item';
+import type { RevenueLeakageOpportunity } from './revenue-leakage';
 
 export type ControlActionType =
   | 'critical-opportunity'
   | 'sla-breach'
   | 'manager-escalation'
   | 'pipeline-leakage'
-  | 'underperforming-owner';
+  | 'underperforming-owner'
+  | 'revenue-leakage';
 
 export type ControlSeverity = 'critical' | 'high' | 'medium';
 
@@ -29,6 +31,7 @@ export interface RevenueControlPlaneInput {
   workItems: SdrWorkItem[];
   performance: SdrPerformanceResult[];
   managerEscalationCount?: number;
+  leakageOpportunities?: RevenueLeakageOpportunity[];
   now?: string;
 }
 
@@ -41,6 +44,11 @@ export interface RevenueControlPlaneSnapshot {
   criticalOpenWorkItems: number;
   slaBreaches: number;
   openManagerEscalations: number;
+  estimatedRecoverableRevenue: number;
+  revenueLeakCount: number;
+  unrecoveredRevenue: number;
+  recoveryRate: number;
+  leakageRate: number;
   atRiskOwners: string[];
   actions: RevenueControlAction[];
   status: 'clear' | 'watch' | 'intervene';
@@ -73,11 +81,14 @@ function action(
   };
 }
 
-/** Converts measured revenue and operating exceptions into manager actions. */
+/** Converts measured revenue, operating exceptions, and leakage into manager actions and reconciled KPIs. */
 export function buildRevenueControlPlane(input: RevenueControlPlaneInput): RevenueControlPlaneSnapshot {
   const now = input.now ?? new Date().toISOString();
   const actions: RevenueControlAction[] = [];
   const scopedItems = input.workItems.filter((item) => item.organizationId === input.organizationId);
+  const scopedLeaks = (input.leakageOpportunities ?? []).filter(
+    (leak) => leak.organizationId === input.organizationId && leak.status === 'active',
+  );
 
   for (const item of scopedItems) {
     if (item.status === 'completed' || item.status === 'cancelled') continue;
@@ -105,6 +116,22 @@ export function buildRevenueControlPlane(input: RevenueControlPlaneInput): Reven
         now,
         item.leadId,
         item.ownerId,
+      ));
+    }
+  }
+
+  // Add high/critical active leakage opportunities to actions
+  for (const leak of scopedLeaks) {
+    if (leak.severity === 'critical' || leak.severity === 'high') {
+      actions.push(action(
+        input.organizationId,
+        'revenue-leakage',
+        leak.severity === 'critical' ? 'critical' : 'high',
+        `Revenue leak: ${leak.leadName} (${leak.leakageType})`,
+        leak.reason,
+        leak.recommendedAction,
+        now,
+        leak.leadId,
       ));
     }
   }
@@ -162,6 +189,22 @@ export function buildRevenueControlPlane(input: RevenueControlPlaneInput): Reven
   const slaBreaches = scopedItems.filter(
     (item) => item.status !== 'completed' && item.status !== 'cancelled' && item.slaBreached,
   ).length;
+
+  const estimatedRecoverableRevenue = scopedLeaks.reduce((sum, item) => sum + item.estimatedRecoverableRevenue, 0);
+  const revenueLeakCount = scopedLeaks.length;
+  const revenueRecovered = input.intelligence.revenueRecovered;
+  const unrecoveredRevenue = Math.max(0, estimatedRecoverableRevenue - revenueRecovered);
+
+  const totalLeakageValue = estimatedRecoverableRevenue + revenueRecovered;
+  const recoveryRate = totalLeakageValue > 0
+    ? Math.min(100, Math.round((revenueRecovered / totalLeakageValue) * 10000) / 100)
+    : 0;
+
+  const totalLeads = input.intelligence.funnel.leads;
+  const leakageRate = totalLeads > 0
+    ? Math.round((revenueLeakCount / totalLeads) * 10000) / 100
+    : 0;
+
   const status: RevenueControlPlaneSnapshot['status'] = actions.some((item) => item.severity === 'critical')
     ? 'intervene'
     : actions.length > 0
@@ -172,11 +215,16 @@ export function buildRevenueControlPlane(input: RevenueControlPlaneInput): Reven
     organizationId: input.organizationId,
     currency: input.intelligence.funnel.currency,
     revenue: input.intelligence.funnel.revenue,
-    revenueRecovered: input.intelligence.revenueRecovered,
+    revenueRecovered,
     revenuePerLead: input.intelligence.revenuePerLead,
     criticalOpenWorkItems,
     slaBreaches,
     openManagerEscalations: input.managerEscalationCount ?? 0,
+    estimatedRecoverableRevenue,
+    revenueLeakCount,
+    unrecoveredRevenue,
+    recoveryRate,
+    leakageRate,
     atRiskOwners,
     actions,
     status,

@@ -1,3 +1,7 @@
+import type { RecoveryAttribution } from './recovery-attribution';
+import type { RevenueLeakageOpportunity } from './revenue-leakage';
+import type { SdrWorkItem } from './sdr-work-item';
+
 export type AppointmentStatus = 'scheduled' | 'confirmed' | 'completed' | 'no_show' | 'cancelled';
 export type LeadOutcomeType = 'won' | 'lost' | 'no_sale' | 'no_show' | 'cancelled' | 'unqualified';
 
@@ -56,3 +60,5 @@ export interface UsageLedgerEntry {
   metadata?: Record<string, unknown>;
   createdAt: string;
 }
+
+export type { RecoveryAttribution, RevenueLeakageOpportunity, SdrWorkItem };

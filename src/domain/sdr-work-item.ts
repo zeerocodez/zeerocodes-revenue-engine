@@ -1,6 +1,7 @@
 import type { LeadState } from './lead-state';
 import type { RevenueActionPlan } from './revenue-action-plan';
 import type { LeadIntent } from './lead';
+import type { RevenueLeakageType } from './revenue-leakage';
 
 export type SdrWorkAction = 'call-now' | 'call-today' | 'follow-up' | 'recover-sla' | 'handoff-closer' | 'review';
 export type SdrDisposition = 'connected' | 'no-answer' | 'callback-requested' | 'qualified' | 'appointment-booked' | 'won' | 'not-qualified' | 'lost' | 'nurture' | 'wrong-number' | 'do-not-contact';
@@ -32,10 +33,16 @@ export interface SdrWorkItem {
   script: SdrScriptPack;
   dispositionOptions: readonly SdrDisposition[];
   ownerId?: string;
+  claimedAt?: string;
+  completedBy?: string;
   createdAt: string;
   completedAt?: string;
   disposition?: SdrDisposition;
   outcomeRevenue?: number;
+  currency?: string;
+  leakageOpportunityId?: string;
+  leakageType?: RevenueLeakageType;
+  estimatedRecoverableRevenue?: number;
   status: 'open' | 'claimed' | 'completed' | 'cancelled';
 }
 
@@ -53,6 +60,10 @@ export interface SdrWorkItemInput {
   now?: string;
   responseSlaMinutes?: number;
   ownerId?: string;
+  leakageOpportunityId?: string;
+  leakageType?: RevenueLeakageType;
+  estimatedRecoverableRevenue?: number;
+  currency?: string;
 }
 
 const BASE_QUESTIONS = [
@@ -137,6 +148,10 @@ export function createSdrWorkItem(input: SdrWorkItemInput, now = input.now ?? ne
     ownerId: input.ownerId,
     createdAt: now,
     status: 'open',
+    leakageOpportunityId: input.leakageOpportunityId,
+    leakageType: input.leakageType,
+    estimatedRecoverableRevenue: input.estimatedRecoverableRevenue,
+    currency: input.currency || 'NGN',
   };
 }
 
