@@ -13,10 +13,12 @@ import {
   Inbox,
   LayoutDashboard,
   Loader2,
+  Menu,
   RefreshCw,
   Settings2,
   ShieldCheck,
   TrendingUp,
+  X,
 } from 'lucide-react';
 import LeadWorkspace from './features/revenue-engine/LeadWorkspace';
 import SdrQueueWorkspace from './features/revenue-engine/SdrQueueWorkspace';
@@ -51,6 +53,7 @@ export default function App() {
   const [control, setControl] = useState<RevenueControlPlaneSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const tenantId = sessionTenant() || 'demo-tenant';
 
   async function loadControlPlane(forceRefresh = false) {
@@ -75,6 +78,7 @@ export default function App() {
       if (hash === 'landing' || hash === '') setActive('Landing');
       else if (hash === 'overview') setActive('Overview');
       else if (hash === 'leads') setActive('Leads');
+      else if (hash === 'sources' || hash === 'lead-sources') setActive('Lead Sources');
       else if (hash === 'sdr-queue' || hash === 'sdr') setActive('SDR Queue');
       else if (hash === 'revenue') setActive('Revenue');
       else if (hash === 'settings') setActive('Settings');
@@ -85,6 +89,7 @@ export default function App() {
 
   const switchTab = (tab: string) => {
     setActive(tab);
+    setMobileNavOpen(false);
     window.location.hash = tab === 'Landing' ? '' : tab.toLowerCase().replace(' ', '-');
   };
 
@@ -106,7 +111,74 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#080b14] text-slate-100">
-      {/* Sidebar */}
+      {/* Mobile Drawer Overlay */}
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm lg:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+
+      {/* Mobile Drawer */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-slate-800 bg-[#0b0f1a] p-5 transition-transform duration-200 lg:hidden ${
+          mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-500 font-black shadow-lg shadow-indigo-500/20">
+              Z
+            </div>
+            <div>
+              <div className="font-bold">Zeerocodes</div>
+              <div className="text-xs text-indigo-400">Revenue Engine</div>
+            </div>
+          </div>
+          <button
+            onClick={() => setMobileNavOpen(false)}
+            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <button
+          onClick={() => switchTab('Landing')}
+          className="mb-4 flex w-full items-center gap-2 rounded-xl border border-slate-800/80 bg-slate-900/60 px-3 py-2 text-xs font-semibold text-slate-400 hover:border-indigo-500/40 hover:text-indigo-300 transition"
+        >
+          <ArrowLeft size={14} />
+          Back to Public Page
+        </button>
+
+        <nav className="space-y-1">
+          {nav.map(([label, Icon]) => (
+            <button
+              key={label}
+              onClick={() => switchTab(label)}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                active === label
+                  ? 'bg-indigo-500/15 text-indigo-300 shadow-sm font-semibold'
+                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-white'
+              }`}
+            >
+              <Icon size={17} />
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="absolute bottom-5 left-5 right-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
+            <CheckCircle2 size={16} /> Engine Operational
+          </div>
+          <div className="mt-1 text-xs text-slate-500">
+            RLS active · Tenant: <span className="text-slate-400">{tenantId}</span>
+          </div>
+        </div>
+      </aside>
+
+      {/* Desktop Sidebar */}
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-800 bg-[#0b0f1a] p-5 lg:block">
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -158,11 +230,20 @@ export default function App() {
       {/* Main Content Area */}
       <main className="lg:pl-64">
         <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-[#080b14]/90 px-5 py-4 backdrop-blur md:px-8">
-          <div>
-            <div className="text-xs uppercase tracking-[0.18em] text-indigo-300 font-semibold">
-              Zeerocodes Revenue Operating System
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              className="rounded-lg border border-slate-800 p-2 text-slate-300 hover:bg-slate-800 lg:hidden"
+              aria-label="Open Navigation Menu"
+            >
+              <Menu size={18} />
+            </button>
+            <div>
+              <div className="text-xs uppercase tracking-[0.18em] text-indigo-300 font-semibold">
+                Zeerocodes Revenue Operating System
+              </div>
+              <h1 className="mt-1 text-xl font-bold">{active}</h1>
             </div>
-            <h1 className="mt-1 text-xl font-bold">{active}</h1>
           </div>
 
           <div className="flex items-center gap-3">

@@ -214,8 +214,9 @@ function ConversationPane({
             body: JSON.stringify({ message: text }),
           });
           if (dr.ok) {
-            const decData = await readJsonOrThrow<{ decision?: ConversationDecision }>(dr, 'Decision failed');
-            if (decData.decision) onDecision(decData.decision);
+            const decData = await readJsonOrThrow<{ conversationDecision?: ConversationDecision; decision?: ConversationDecision }>(dr, 'Decision failed');
+            const resultDec = decData.conversationDecision ?? decData.decision;
+            if (resultDec) onDecision(resultDec);
           }
         }
         await onRefresh();

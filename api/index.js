@@ -3172,7 +3172,7 @@ if (!usePostgres) {
   memoryMembershipRepository.seedTenant({ id: tenantId, name: "Demo Tenant", slug: "demo-tenant", status: "active", createdAt: (/* @__PURE__ */ new Date()).toISOString() });
   memoryMembershipRepository.seedMembership({ id: `membership_${userId}_${tenantId}`, userId, tenantId, email: process.env.DEV_USER_EMAIL || "demo@example.com", role, active: true, createdAt: (/* @__PURE__ */ new Date()).toISOString() });
 }
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
 function contextOf(req) {
   if (!req.context) throw new Error("Authenticated request context is required");
   return req.context;
@@ -3190,6 +3190,24 @@ app.post("/api/auth/dev-session", (req, res) => {
   const tenantId = String(req.body?.tenantId || process.env.DEV_TENANT_ID || "demo-tenant");
   const userId = String(req.body?.userId || process.env.DEV_USER_ID || "demo-user");
   return res.json({ token: signSession(userId, tenantId), tenantId, userId });
+});
+app.post("/api/public/audit-requests", async (req, res) => {
+  try {
+    const input = req.body;
+    const auditRequest = createAuditRequest(input, `audit_${randomUUID5()}`);
+    await auditRequestStore.create(auditRequest);
+    return res.status(201).json({ auditRequest, message: "Audit request received successfully" });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Invalid audit request submission" });
+  }
+});
+app.get("/api/public/audit-requests", async (_req, res) => {
+  try {
+    const requests = await auditRequestStore.list();
+    return res.json({ auditRequests: requests });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Failed to fetch audit requests" });
+  }
 });
 async function authMiddleware(req, res, next) {
   try {
@@ -3579,22 +3597,14 @@ app.post("/api/webhooks/deliver", async (req, res) => {
     return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : "Unable to deliver webhooks" });
   }
 });
-app.post("/api/public/audit-requests", async (req, res) => {
+app.get("/api/audit-requests", async (req, res) => {
   try {
-    const input = req.body;
-    const auditRequest = createAuditRequest(input, `audit_${randomUUID5()}`);
-    await auditRequestStore.create(auditRequest);
-    return res.status(201).json({ auditRequest, message: "Audit request received successfully" });
-  } catch (e) {
-    return res.status(400).json({ error: e instanceof Error ? e.message : "Invalid audit request submission" });
-  }
-});
-app.get("/api/public/audit-requests", async (_req, res) => {
-  try {
+    const c = contextOf(req);
+    requireRole(c, "viewer");
     const requests = await auditRequestStore.list();
     return res.json({ auditRequests: requests });
   } catch (e) {
-    return res.status(500).json({ error: e instanceof Error ? e.message : "Failed to fetch audit requests" });
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : "Failed to fetch audit requests" });
   }
 });
 app.post("/api/leads/import-csv", async (req, res) => {

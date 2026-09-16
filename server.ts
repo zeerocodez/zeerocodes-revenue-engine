@@ -88,7 +88,7 @@ if (!usePostgres) {
   memoryMembershipRepository.seedMembership({ id: `membership_${userId}_${tenantId}`, userId, tenantId, email: process.env.DEV_USER_EMAIL || 'demo@example.com', role, active: true, createdAt: new Date().toISOString() });
 }
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 type RequestWithContext = express.Request & { context?: AuthenticatedRequestContext };
 function contextOf(req: RequestWithContext): AuthenticatedRequestContext {
   if (!req.context) throw new Error('Authenticated request context is required');
@@ -103,6 +103,7 @@ function tenantError(error: unknown) {
   return 400;
 }
 
+// Public endpoints (no auth required)
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'zeerocodes-revenue-engine', mode: usePostgres ? 'postgres' : 'memory', workflow: 'lead-to-revenue', rls: usePostgres }));
 app.post('/api/auth/dev-session', (req, res) => {
   const tenantId = String(req.body?.tenantId || process.env.DEV_TENANT_ID || 'demo-tenant');
@@ -110,6 +111,27 @@ app.post('/api/auth/dev-session', (req, res) => {
   return res.json({ token: signSession(userId, tenantId), tenantId, userId });
 });
 
+app.post('/api/public/audit-requests', async (req, res) => {
+  try {
+    const input = req.body as AuditRequestInput;
+    const auditRequest = createAuditRequest(input, `audit_${randomUUID()}`);
+    await auditRequestStore.create(auditRequest);
+    return res.status(201).json({ auditRequest, message: 'Audit request received successfully' });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : 'Invalid audit request submission' });
+  }
+});
+
+app.get('/api/public/audit-requests', async (_req, res) => {
+  try {
+    const requests = await auditRequestStore.list();
+    return res.json({ auditRequests: requests });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to fetch audit requests' });
+  }
+});
+
+// Authenticated API Middleware
 async function authMiddleware(req: RequestWithContext, res: express.Response, next: express.NextFunction) {
   try {
     let context: AuthenticatedRequestContext;
@@ -513,23 +535,14 @@ app.post('/api/webhooks/deliver', async (req: RequestWithContext, res) => {
   }
 });
 
-app.post('/api/public/audit-requests', async (req, res) => {
+app.get('/api/audit-requests', async (req: RequestWithContext, res) => {
   try {
-    const input = req.body as AuditRequestInput;
-    const auditRequest = createAuditRequest(input, `audit_${randomUUID()}`);
-    await auditRequestStore.create(auditRequest);
-    return res.status(201).json({ auditRequest, message: 'Audit request received successfully' });
-  } catch (e) {
-    return res.status(400).json({ error: e instanceof Error ? e.message : 'Invalid audit request submission' });
-  }
-});
-
-app.get('/api/public/audit-requests', async (_req, res) => {
-  try {
+    const c = contextOf(req);
+    requireRole(c, 'viewer');
     const requests = await auditRequestStore.list();
     return res.json({ auditRequests: requests });
   } catch (e) {
-    return res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to fetch audit requests' });
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Failed to fetch audit requests' });
   }
 });
 
