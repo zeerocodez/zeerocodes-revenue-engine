@@ -3425,8 +3425,8 @@ if (isDirectExecution && !process.env.VERCEL) {
 }
 var server_default = app;
 
-// api/index.ts
-var index_default = server_default;
+// src/api-serverless.ts
+var api_serverless_default = server_default;
 export {
-  index_default as default
+  api_serverless_default as default
 };
