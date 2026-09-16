@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowUpRight, CheckCircle2, DollarSign, Flame, RefreshCw, ShieldAlert, TrendingUp } from 'lucide-react';
 import type { RecoveryAttribution } from '../../domain/recovery-attribution';
 import type { RevenueLeakageOpportunity } from '../../domain/revenue-leakage';
-import { apiFetch } from '../../lib/api';
+import { apiFetch, readJsonOrThrow } from '../../lib/api';
 
 export default function RevenueAttributionWorkspace() {
   const [attributions, setAttributions] = useState<RecoveryAttribution[]>([]);
@@ -22,11 +22,11 @@ export default function RevenueAttributionWorkspace() {
       ]);
 
       if (attrRes.ok) {
-        const data = await attrRes.json();
+        const data = await readJsonOrThrow<{ attributions?: RecoveryAttribution[] }>(attrRes, 'Failed to load attributions');
         setAttributions(data.attributions || []);
       }
       if (leakRes.ok) {
-        const data = await leakRes.json();
+        const data = await readJsonOrThrow<{ leakages?: RevenueLeakageOpportunity[] }>(leakRes, 'Failed to load leakages');
         setLeakages(data.leakages || []);
       }
     } catch (e) {
@@ -46,8 +46,12 @@ export default function RevenueAttributionWorkspace() {
     setError('');
     try {
       const res = await apiFetch('/api/revenue/leakage/detect', { method: 'POST' });
-      if (!res.ok) throw new Error((await res.json()).error || 'Leakage detection failed');
-      const data = await res.json();
+      const data = await readJsonOrThrow<{
+        scannedLeads: number;
+        detectedLeakages?: RevenueLeakageOpportunity[];
+        totalRecoverableRevenue?: number;
+      }>(res, 'Leakage detection failed');
+
       setScanMessage(
         `Scanned ${data.scannedLeads} leads. Detected ${data.detectedLeakages?.length || 0} active leakage opportunities (₦${(data.totalRecoverableRevenue || 0).toLocaleString()} recoverable).`,
       );

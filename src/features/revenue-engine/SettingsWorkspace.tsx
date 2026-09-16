@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Save, Settings2, Sliders } from 'lucide-react';
 import type { ClientConfiguration } from '../../domain/client-configuration';
-import { apiFetch } from '../../lib/api';
+import { apiFetch, readJsonOrThrow } from '../../lib/api';
 
 export default function SettingsWorkspace() {
   const [config, setConfig] = useState<ClientConfiguration | null>(null);
@@ -21,8 +21,7 @@ export default function SettingsWorkspace() {
     setError('');
     try {
       const res = await apiFetch('/api/configuration');
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed to load configuration');
-      const data = await res.json();
+      const data = await readJsonOrThrow<{ configuration?: ClientConfiguration }>(res, 'Failed to load configuration');
       if (data.configuration) {
         setConfig(data.configuration);
         setThreshold(data.configuration.scoring?.threshold ?? 70);
@@ -77,9 +76,8 @@ export default function SettingsWorkspace() {
         body: JSON.stringify(updated),
       });
 
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed to save configuration');
-      const data = await res.json();
-      setConfig(data.configuration);
+      const data = await readJsonOrThrow<{ configuration?: ClientConfiguration }>(res, 'Failed to save configuration');
+      if (data.configuration) setConfig(data.configuration);
       setMessage('Qualification policy and scoring weights updated successfully!');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');

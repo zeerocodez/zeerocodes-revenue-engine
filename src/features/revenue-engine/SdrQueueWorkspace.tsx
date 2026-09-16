@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle, Clock, DollarSign, FileText, Phone, RefreshCw, ShieldCheck, User } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle, Clock, DollarSign, FileText, RefreshCw, ShieldCheck, User } from 'lucide-react';
 import type { SdrWorkItem, SdrDisposition } from '../../domain/sdr-work-item';
-import { apiFetch } from '../../lib/api';
+import { apiFetch, readJsonOrThrow } from '../../lib/api';
 
 export default function SdrQueueWorkspace() {
   const [items, setItems] = useState<SdrWorkItem[]>([]);
@@ -23,8 +23,7 @@ export default function SdrQueueWorkspace() {
     setError('');
     try {
       const res = await apiFetch('/api/sdr/queue');
-      if (!res.ok) throw new Error((await res.json()).error || 'Failed to load SDR queue');
-      const data = await res.json();
+      const data = await readJsonOrThrow<{ items?: SdrWorkItem[] }>(res, 'Failed to load SDR queue');
       setItems(data.items || []);
       if (selectedItem) {
         const refreshed = (data.items || []).find((i: SdrWorkItem) => i.id === selectedItem.id);
@@ -48,8 +47,7 @@ export default function SdrQueueWorkspace() {
       const res = await apiFetch(`/api/sdr/work-items/${encodeURIComponent(item.id)}/claim`, {
         method: 'POST',
       });
-      if (!res.ok) throw new Error((await res.json()).error || 'Claim failed');
-      const data = await res.json();
+      const data = await readJsonOrThrow<{ workItem: SdrWorkItem }>(res, 'Claim failed');
       setSelectedItem(data.workItem);
       await loadQueue();
     } catch (e) {
@@ -81,7 +79,7 @@ export default function SdrQueueWorkspace() {
           }),
         });
 
-        if (!res.ok) throw new Error((await res.json()).error || 'Recovery execution failed');
+        await readJsonOrThrow(res, 'Recovery execution failed');
         setActionSuccess(`Successfully recovered ₦${amt.toLocaleString()} revenue!`);
       } else {
         const payload: any = { disposition: selectedDisposition };
@@ -97,7 +95,7 @@ export default function SdrQueueWorkspace() {
           body: JSON.stringify(payload),
         });
 
-        if (!res.ok) throw new Error((await res.json()).error || 'Disposition failed');
+        await readJsonOrThrow(res, 'Disposition failed');
         setActionSuccess(`Applied disposition: ${selectedDisposition}`);
       }
 

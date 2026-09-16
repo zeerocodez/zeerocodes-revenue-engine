@@ -508,9 +508,17 @@ app.post('/api/webhooks/deliver', async (req: RequestWithContext, res) => {
   }
 });
 
-const staticDist = path.resolve(process.cwd(), 'dist');
-app.use(express.static(staticDist));
-app.get('*', (_req, res) => res.sendFile(path.join(staticDist, 'index.html')));
+if (!process.env.VERCEL) {
+  const staticDist = path.resolve(process.cwd(), 'dist');
+  app.use(express.static(staticDist));
+  app.get('*', (_req, res) => res.sendFile(path.join(staticDist, 'index.html')));
+}
+
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Unhandled API Error:', err);
+  const message = err instanceof Error ? err.message : 'Internal Server Error';
+  return res.status(500).json({ error: message });
+});
 
 async function start() {
   if (usePostgres) {
