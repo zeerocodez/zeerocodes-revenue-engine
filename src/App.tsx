@@ -75,13 +75,27 @@ export default function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
-      if (hash === 'landing' || hash === '') setActive('Landing');
-      else if (hash === 'overview') setActive('Overview');
-      else if (hash === 'leads') setActive('Leads');
-      else if (hash === 'sources' || hash === 'lead-sources') setActive('Lead Sources');
-      else if (hash === 'sdr-queue' || hash === 'sdr') setActive('SDR Queue');
-      else if (hash === 'revenue') setActive('Revenue');
-      else if (hash === 'settings') setActive('Settings');
+      if (hash === 'landing' || hash === '') {
+        setActive('Landing');
+      } else if (hash === 'overview') {
+        setActive('Overview');
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      } else if (hash === 'leads') {
+        setActive('Leads');
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      } else if (hash === 'sources' || hash === 'lead-sources') {
+        setActive('Lead Sources');
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      } else if (hash === 'sdr-queue' || hash === 'sdr') {
+        setActive('SDR Queue');
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      } else if (hash === 'revenue') {
+        setActive('Revenue');
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      } else if (hash === 'settings') {
+        setActive('Settings');
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      }
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
@@ -90,7 +104,11 @@ export default function App() {
   const switchTab = (tab: string) => {
     setActive(tab);
     setMobileNavOpen(false);
-    window.location.hash = tab === 'Landing' ? '' : tab.toLowerCase().replace(' ', '-');
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    const targetHash = tab === 'Landing' ? '' : tab.toLowerCase().replace(' ', '-');
+    if (window.location.hash.replace('#', '').toLowerCase() !== targetHash) {
+      window.location.hash = targetHash;
+    }
   };
 
   if (active === 'Landing') {
@@ -104,6 +122,7 @@ export default function App() {
   }
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     if (active !== 'Landing') {
       void loadControlPlane();
     }

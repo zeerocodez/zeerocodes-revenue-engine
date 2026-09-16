@@ -586,12 +586,14 @@ export default function LandingPage({ onLaunchWorkspace }: LandingPageProps) {
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
             <button
+              type="button"
               onClick={() => setShowAuditModal(true)}
               className="button"
             >
               Request Free Leak Audit <ArrowRight size={15} />
             </button>
             <button
+              type="button"
               onClick={() => onLaunchWorkspace('Overview')}
               className="button button-ghost"
             >
@@ -616,12 +618,12 @@ export default function LandingPage({ onLaunchWorkspace }: LandingPageProps) {
 
             <div>
               <small>WORKSPACES</small>
-              <button onClick={() => onLaunchWorkspace('Overview')} className="footer-button">Overview Control Plane</button>
-              <button onClick={() => onLaunchWorkspace('Leads')} className="footer-button">Lead Inbox</button>
-              <button onClick={() => onLaunchWorkspace('Lead Sources')} className="footer-button">Lead Sources & CSV</button>
-              <button onClick={() => onLaunchWorkspace('SDR Queue')} className="footer-button">SDR Work Queue</button>
-              <button onClick={() => onLaunchWorkspace('Revenue')} className="footer-button">Revenue Attribution</button>
-              <button onClick={() => onLaunchWorkspace('Settings')} className="footer-button">Tenant Policy Settings</button>
+              <button type="button" onClick={() => onLaunchWorkspace('Overview')} className="footer-button">Overview Control Plane</button>
+              <button type="button" onClick={() => onLaunchWorkspace('Leads')} className="footer-button">Lead Inbox</button>
+              <button type="button" onClick={() => onLaunchWorkspace('Lead Sources')} className="footer-button">Lead Sources & CSV</button>
+              <button type="button" onClick={() => onLaunchWorkspace('SDR Queue')} className="footer-button">SDR Work Queue</button>
+              <button type="button" onClick={() => onLaunchWorkspace('Revenue')} className="footer-button">Revenue Attribution</button>
+              <button type="button" onClick={() => onLaunchWorkspace('Settings')} className="footer-button">Tenant Policy Settings</button>
             </div>
 
             <div>
