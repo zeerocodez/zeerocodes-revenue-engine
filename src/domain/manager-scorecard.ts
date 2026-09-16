@@ -40,9 +40,10 @@ export function buildManagerScorecard(input: ManagerScorecardInput): ManagerScor
   const qaByOwner = new Map<string, number[]>();
 
   for (const review of qaReviews) {
-    const existing = qaByOwner.get(review.reviewerId ?? 'unassigned') ?? [];
+    if (!review.ownerId) continue;
+    const existing = qaByOwner.get(review.ownerId) ?? [];
     existing.push(review.total);
-    qaByOwner.set(review.reviewerId ?? 'unassigned', existing);
+    qaByOwner.set(review.ownerId, existing);
   }
 
   const atRiskOwners = performance

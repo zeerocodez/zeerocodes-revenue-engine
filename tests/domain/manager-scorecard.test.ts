@@ -31,4 +31,21 @@ describe('buildManagerScorecard', () => {
     expect(result.escalationCount).toBe(2);
     expect(result.teamCloseRate).toBe(33.33);
   });
+
+  it('uses the SDR owner, not the QA reviewer, when flagging QA risk', () => {
+    const result = buildManagerScorecard({
+      performance: [performance[0]],
+      qaReviews: [{
+        id: 'qa-1', organizationId: 'org-1', leadId: 'lead-1', workItemId: 'wi-1',
+        ownerId: 'sdr-1', reviewerId: 'manager-1',
+        scores: {
+          responseQuality: 60, qualificationCompleteness: 60, dispositionAccuracy: 60,
+          slaAdherence: 60, escalationQuality: 60, outcomeQuality: 60,
+        },
+        total: 60, passed: false, reviewedAt: '2026-09-15T08:00:00.000Z',
+      }],
+    });
+
+    expect(result.atRiskOwners).toEqual(['sdr-1']);
+  });
 });

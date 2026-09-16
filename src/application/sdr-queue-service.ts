@@ -15,6 +15,11 @@ export interface SdrQueueSnapshot {
   breachedCount: number;
 }
 
+export interface SdrCompletionMetadata {
+  ownerId?: string;
+  outcomeRevenue?: number;
+}
+
 export class SdrQueueService {
   constructor(private readonly store: SdrWorkItemStore) {}
 
@@ -78,15 +83,35 @@ export class SdrQueueService {
     organizationId: string,
     itemId: string,
     disposition: string,
-    completedBy?: string,
+    completedByOrMetadata?: string | SdrCompletionMetadata,
     outcomeRevenue?: number,
     now = new Date().toISOString(),
   ): Promise<SdrWorkItem> {
     if (!organizationId?.trim()) throw new Error('organizationId is required');
     if (!itemId?.trim()) throw new Error('itemId is required');
 
+    let completedBy: string | undefined;
+    let revenue: number | undefined = outcomeRevenue;
+    let completedAt = now;
+
+    if (typeof completedByOrMetadata === 'object' && completedByOrMetadata !== null) {
+      completedBy = completedByOrMetadata.ownerId;
+      if (completedByOrMetadata.outcomeRevenue !== undefined) {
+        revenue = Math.max(0, Math.round(completedByOrMetadata.outcomeRevenue));
+      }
+    } else {
+      completedBy = completedByOrMetadata;
+    }
+
     if (this.store.completeSdrWorkItem) {
-      const completed = await this.store.completeSdrWorkItem(organizationId, itemId, disposition, outcomeRevenue, completedBy, now);
+      const completed = await this.store.completeSdrWorkItem(
+        organizationId,
+        itemId,
+        disposition,
+        revenue,
+        completedBy,
+        completedAt,
+      );
       if (completed) return completed;
     }
 
@@ -98,9 +123,10 @@ export class SdrQueueService {
     if (item.status !== 'claimed' && item.status !== 'open') throw new Error('SDR work item is not active');
     item.status = 'completed';
     item.disposition = disposition as any;
-    item.outcomeRevenue = outcomeRevenue;
+    if (completedBy) item.ownerId = completedBy;
     item.completedBy = completedBy;
-    item.completedAt = now;
+    if (revenue !== undefined) item.outcomeRevenue = Math.max(0, Math.round(revenue));
+    item.completedAt = completedAt;
     item.recommendedAction = `Completed with disposition: ${disposition}`;
     await this.store.save(item);
     return item;

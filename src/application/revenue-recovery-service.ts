@@ -1,14 +1,18 @@
 import { randomUUID } from 'node:crypto';
+import type { QualificationResult } from '../domain/qualification';
+import type { SdrDisposition, SdrWorkItem } from '../domain/sdr-work-item';
+import { createRecoveryAttribution, type RecoveryAttribution } from '../domain/recovery-attribution';
+import type { LeadRecord } from '../domain/lead';
+import type { LeadOutcomeRecord } from '../domain/revenue-workflow';
 import type { LeadStore } from './revenue-engine-service';
 import type { LeadLifecycleService } from './lead-lifecycle-service';
 import type { PostgresRevenueWorkflowRepository } from '../integrations/postgres-workflow';
 import type { MemoryRevenueWorkflowRepository } from '../integrations/memory-workflow';
 import type { LeadEventStore } from '../domain/lead-events';
 import type { PostgresDatabase } from '../integrations/postgres';
-import { createRecoveryAttribution, type RecoveryAttribution } from '../domain/recovery-attribution';
-import type { SdrWorkItem } from '../domain/sdr-work-item';
-import type { LeadRecord } from '../domain/lead';
-import type { LeadOutcomeRecord } from '../domain/revenue-workflow';
+import { RevenueRecordingService } from './revenue-recording-service';
+import { SdrDispositionService } from './sdr-disposition-service';
+import { SdrQueueService } from './sdr-queue-service';
 
 export type RevenueWorkflowRepo = PostgresRevenueWorkflowRepository | MemoryRevenueWorkflowRepository;
 
@@ -32,16 +36,76 @@ export interface RecoveryExecutionResult {
   idempotentReplay?: boolean;
 }
 
-export class RevenueRecoveryService {
-  constructor(
-    private readonly workflow: RevenueWorkflowRepo,
-    private readonly leadStore: LeadStore,
-    private readonly lifecycleService: LeadLifecycleService,
-    private readonly eventStore?: LeadEventStore,
-    private readonly db?: PostgresDatabase,
-  ) {}
+export interface RevenueRecoveryInput {
+  organizationId: string;
+  workItemId: string;
+  disposition: SdrDisposition;
+  ownerId: string;
+  appointmentStatus?: 'scheduled' | 'confirmed' | 'completed' | 'no_show' | 'cancelled';
+  appointmentId?: string;
+  qualification?: QualificationResult;
+  outcomeRevenue?: number;
+  currency?: string;
+  now?: string;
+}
 
+export interface RevenueRecoveryResult {
+  workItem: SdrWorkItem;
+  disposition: SdrDisposition;
+  lifecycleState: SdrWorkItem['leadState'];
+  transitioned: boolean;
+  revenueRecorded: boolean;
+  revenueAmount: number;
+  duplicateRevenue: boolean;
+}
+
+/**
+ * Production revenue recovery service.
+ * Supports end-to-end evidence-gated recovery with atomic claims, idempotent writes,
+ * and recovery attributions traceable to revenue leakage.
+ */
+export class RevenueRecoveryService {
+  private readonly workflow?: RevenueWorkflowRepo;
+  private readonly leadStore?: LeadStore;
+  private readonly lifecycleService?: LeadLifecycleService;
+  private readonly eventStore?: LeadEventStore;
+  private readonly db?: PostgresDatabase;
+
+  private readonly queue?: SdrQueueService;
+  private readonly dispositionService?: SdrDispositionService;
+  private readonly revenueRecordingService?: RevenueRecordingService;
+
+  constructor(
+    first: RevenueWorkflowRepo | SdrQueueService,
+    second: LeadStore | SdrDispositionService,
+    third: LeadLifecycleService | RevenueRecordingService,
+    eventStore?: LeadEventStore,
+    db?: PostgresDatabase,
+  ) {
+    if ('queue' in first || typeof (first as any).enqueue === 'function') {
+      this.queue = first as SdrQueueService;
+      this.dispositionService = second as SdrDispositionService;
+      this.revenueRecordingService = third as RevenueRecordingService;
+    } else {
+      this.workflow = first as RevenueWorkflowRepo;
+      this.leadStore = second as LeadStore;
+      this.lifecycleService = third as LeadLifecycleService;
+      this.eventStore = eventStore;
+      this.db = db;
+    }
+  }
+
+  /**
+   * Comprehensive end-to-end recovery execution:
+   * Validates session owner -> Atomically claims work item -> Verifies 'booked' state ->
+   * Creates Server-derived Recovery Attribution -> Transitions lifecycle to 'won' ->
+   * Records financial outcome & attribution -> Completes work item -> Emits audit event.
+   */
   async executeRecovery(input: ExecuteRecoveryInput): Promise<RecoveryExecutionResult> {
+    if (!this.workflow || !this.leadStore || !this.lifecycleService) {
+      throw new Error('RevenueRecoveryService not configured for direct workflow repository execution');
+    }
+
     if (!input.organizationId?.trim()) throw new Error('organizationId is required');
     if (!input.workItemId?.trim()) throw new Error('workItemId is required');
     if (!input.ownerUserId?.trim()) throw new Error('ownerUserId is required');
@@ -232,6 +296,83 @@ export class RevenueRecoveryService {
       workItem: completedWorkItem || claimedItem,
       outcome: outcomeRecord,
       recoveryAttribution,
+    };
+  }
+
+  /**
+   * Closes the operational loop: claim -> disposition -> lifecycle outcome ->
+   * revenue attribution -> work-item completion.
+   */
+  async recover(input: RevenueRecoveryInput): Promise<RevenueRecoveryResult> {
+    if (!this.queue || !this.dispositionService || !this.revenueRecordingService) {
+      throw new Error('RevenueRecoveryService not configured for queue disposition workflow');
+    }
+
+    if (!input.organizationId) throw new Error('organizationId is required');
+    if (!input.ownerId) throw new Error('ownerId is required');
+
+    const revenueAmount = Math.max(0, Math.round(input.outcomeRevenue ?? 0));
+    if (input.disposition === 'won') {
+      if (revenueAmount <= 0) throw new Error('won recovery requires outcomeRevenue');
+      if (!input.currency) throw new Error('won recovery requires currency');
+    }
+
+    const queue = await this.queue.queue(input.organizationId, input.now);
+    const item = queue.items.find((candidate) => candidate.id === input.workItemId);
+    if (!item) throw new Error('SDR work item not found or already completed');
+    if (item.organizationId !== input.organizationId) throw new Error('Tenant access denied');
+    if (item.status === 'open') await this.queue.claim(input.organizationId, item.id, input.ownerId);
+
+    const current = (await this.queue.queue(input.organizationId, input.now)).items.find(
+      (candidate) => candidate.id === input.workItemId,
+    );
+    if (!current) throw new Error('SDR work item disappeared during recovery');
+
+    const lifecycle = await this.dispositionService.apply({
+      organizationId: input.organizationId,
+      item: current,
+      disposition: input.disposition,
+      appointmentStatus: input.appointmentStatus,
+      appointmentId: input.appointmentId,
+      qualification: input.qualification,
+      now: input.now,
+    });
+
+    let revenueRecorded = false;
+    let duplicateRevenue = false;
+
+    if (input.disposition === 'won') {
+      const recording = await this.revenueRecordingService.record({
+        id: `rev_${current.id}_won`,
+        organizationId: input.organizationId,
+        leadId: current.leadId,
+        attributionType: 'recovered',
+        amount: revenueAmount,
+        currency: input.currency!,
+        ownerId: input.ownerId,
+        recordedAt: input.now,
+        evidence: 'won-outcome',
+        idempotencyKey: `recovery:${current.id}:won`,
+      });
+      revenueRecorded = true;
+      duplicateRevenue = recording.duplicate;
+    }
+
+    const completed = await this.queue.complete(
+      input.organizationId,
+      current.id,
+      input.disposition,
+      { ownerId: input.ownerId, outcomeRevenue: revenueAmount || undefined },
+    );
+
+    return {
+      workItem: completed,
+      disposition: input.disposition,
+      lifecycleState: lifecycle.state,
+      transitioned: lifecycle.transitioned,
+      revenueRecorded,
+      revenueAmount,
+      duplicateRevenue,
     };
   }
 }

@@ -10,6 +10,7 @@ import {
   GitBranch,
   Inbox,
   LayoutDashboard,
+  Loader2,
   RefreshCw,
   Settings2,
   ShieldCheck,
@@ -20,7 +21,8 @@ import SdrQueueWorkspace from './features/revenue-engine/SdrQueueWorkspace';
 import RevenueAttributionWorkspace from './features/revenue-engine/RevenueAttributionWorkspace';
 import SettingsWorkspace from './features/revenue-engine/SettingsWorkspace';
 import type { RevenueControlPlaneSnapshot } from './domain/revenue-control-plane';
-import { apiFetch, sessionTenant } from './lib/api';
+import { fetchRevenueControlPlane } from './lib/revenue-control-plane-api';
+import { sessionTenant } from './lib/api';
 
 const nav = [
   ['Overview', LayoutDashboard],
@@ -33,18 +35,16 @@ const nav = [
 export default function App() {
   const [active, setActive] = useState<string>('Overview');
   const [control, setControl] = useState<RevenueControlPlaneSnapshot | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const tenantId = sessionTenant() || 'demo-tenant';
 
   async function loadControlPlane() {
     setLoading(true);
-    setError('');
+    setError(null);
     try {
-      const res = await apiFetch('/api/revenue/control-plane');
-      if (!res.ok) throw new Error((await res.json()).error || 'Unable to load revenue control plane');
-      const data = await res.json();
-      setControl(data.controlPlane);
+      const snapshot = await fetchRevenueControlPlane();
+      setControl(snapshot);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error loading control plane');
     } finally {
@@ -122,8 +122,8 @@ export default function App() {
               </span>
             )}
             <div className="flex items-center gap-2 rounded-full border border-slate-800 px-3 py-1.5 text-xs text-slate-400">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              Live Backend
+              <span className={`h-2 w-2 rounded-full ${loading ? 'bg-amber-400' : control ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+              {loading ? 'Connecting…' : control ? 'Live Backend' : 'Backend Offline'}
             </div>
           </div>
         </header>
@@ -163,22 +163,32 @@ function Overview({
 }: {
   control: RevenueControlPlaneSnapshot | null;
   loading: boolean;
-  error: string;
+  error: string | null;
   onRefresh: () => Promise<void>;
   onOpenSdrQueue: () => void;
   onOpenLeads: () => void;
 }) {
   if (loading && !control) {
-    return <div className="card p-8 text-sm muted">Connecting to live revenue control plane…</div>;
+    return (
+      <section className="card p-8">
+        <div className="flex items-center gap-3 text-sm text-slate-300">
+          <Loader2 size={18} className="animate-spin text-indigo-400" />
+          Connecting to live revenue control plane…
+        </div>
+      </section>
+    );
   }
 
   if (error && !control) {
     return (
       <div className="card p-8 text-sm text-rose-300 space-y-3">
-        <div>Error connecting to revenue control plane: {error}</div>
+        <div className="flex items-center gap-2 font-semibold">
+          <AlertTriangle size={18} />
+          Error connecting to revenue control plane: {error}
+        </div>
         <button
           onClick={() => void onRefresh()}
-          className="rounded-xl bg-indigo-500 px-4 py-2 text-xs font-semibold text-white"
+          className="rounded-xl bg-indigo-500 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-400 transition"
         >
           Retry Connection
         </button>
@@ -323,6 +333,24 @@ function Overview({
           </div>
         </section>
       </div>
+
+      {/* Operational System Health */}
+      <section className="card p-6">
+        <h2 className="font-semibold text-white">Operating System Modules</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+          {[
+            ['Lead Intake & Lifecycle', 'Evidence-Gated'],
+            ['Deterministic Qualification', 'Configurable Policy'],
+            ['SDR Work Queue', 'Atomic Claiming & Recovery'],
+            ['Revenue Attribution', 'Live Database Ledger'],
+          ].map(([a, b]) => (
+            <div key={a} className="rounded-xl bg-slate-900/60 p-4 border border-slate-800">
+              <div className="text-xs text-slate-400">{a}</div>
+              <div className="mt-1 text-sm font-semibold text-emerald-300">{b}</div>
+            </div>
+          ))}
+        </div>
+      </section>
     </>
   );
 }
