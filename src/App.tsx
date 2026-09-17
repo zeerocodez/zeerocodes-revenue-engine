@@ -7,12 +7,16 @@ import {
   Calendar,
   CheckSquare,
   CircleDollarSign,
+  FileText,
   Flame,
   GitBranch,
   Globe,
   Inbox,
   LayoutDashboard,
   Menu,
+  MessageSquare,
+  Radio,
+  Repeat,
   Shield,
   ShieldCheck,
   Sparkles,
@@ -26,6 +30,10 @@ import OperationalDashboard from './features/dashboard/OperationalDashboard';
 import ClientDashboard from './features/dashboard/ClientDashboard';
 import SalesPipelineWorkspace from './features/sales/SalesPipelineWorkspace';
 import ActivitiesWorkspace from './features/sales/ActivitiesWorkspace';
+import UnifiedInboxWorkspace from './features/inbox/UnifiedInboxWorkspace';
+import FollowUpCadenceWorkspace from './features/automation/FollowUpCadenceWorkspace';
+import IntegrationsHubWorkspace from './features/integrations/IntegrationsHubWorkspace';
+import TemplatesWorkspace from './features/templates/TemplatesWorkspace';
 import LeadWorkspace from './features/revenue-engine/LeadWorkspace';
 import SdrQueueWorkspace from './features/revenue-engine/SdrQueueWorkspace';
 import RevenueAttributionWorkspace from './features/revenue-engine/RevenueAttributionWorkspace';
@@ -45,9 +53,13 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'Ops Hub', hash: 'operational', label: 'Executive Ops', icon: LayoutDashboard, badge: 'Live' },
   { id: 'Client Portal', hash: 'client-portal', label: 'Client Portal', icon: BarChart3 },
+  { id: 'Inbox', hash: 'inbox', label: 'Live Inbox', icon: MessageSquare, badge: 'AI' },
   { id: 'Pipeline', hash: 'pipeline', label: 'Deals & CRM', icon: Zap, badge: 'Sales' },
-  { id: 'Activities', hash: 'activities', label: 'Tasks & Calls', icon: CheckSquare },
+  { id: 'Follow-ups', hash: 'follow-ups', label: 'Cadences', icon: Repeat },
   { id: 'SDR Queue', hash: 'sdr-queue', label: 'SDR Workstation', icon: GitBranch },
+  { id: 'Integrations', hash: 'integrations', label: 'Integrations & Sim', icon: Radio },
+  { id: 'Templates', hash: 'templates', label: 'Templates', icon: FileText },
+  { id: 'Activities', hash: 'activities', label: 'Activities', icon: CheckSquare },
   { id: 'Leads', hash: 'leads', label: 'Leads', icon: Inbox },
   { id: 'Lead Sources', hash: 'sources', label: 'Sources', icon: Globe },
   { id: 'Revenue', hash: 'revenue', label: 'Attribution', icon: CircleDollarSign },
@@ -59,7 +71,11 @@ export default function App() {
     const hash = window.location.hash.replace('#', '').toLowerCase();
     if (hash === 'operational' || hash === 'overview') return 'Ops Hub';
     if (hash === 'client-portal' || hash === 'client') return 'Client Portal';
+    if (hash === 'inbox' || hash === 'messages') return 'Inbox';
     if (hash === 'pipeline' || hash === 'deals') return 'Pipeline';
+    if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') return 'Follow-ups';
+    if (hash === 'integrations' || hash === 'simulator') return 'Integrations';
+    if (hash === 'templates') return 'Templates';
     if (hash === 'activities' || hash === 'tasks') return 'Activities';
     if (hash === 'sdr-queue' || hash === 'sdr') return 'SDR Queue';
     if (hash === 'leads') return 'Leads';
@@ -115,7 +131,11 @@ export default function App() {
       if (hash === 'landing' || hash === '') setActiveTab('Landing');
       else if (hash === 'operational' || hash === 'overview') setActiveTab('Ops Hub');
       else if (hash === 'client-portal' || hash === 'client') setActiveTab('Client Portal');
+      else if (hash === 'inbox' || hash === 'messages') setActiveTab('Inbox');
       else if (hash === 'pipeline' || hash === 'deals') setActiveTab('Pipeline');
+      else if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') setActiveTab('Follow-ups');
+      else if (hash === 'integrations' || hash === 'simulator') setActiveTab('Integrations');
+      else if (hash === 'templates') setActiveTab('Templates');
       else if (hash === 'activities' || hash === 'tasks') setActiveTab('Activities');
       else if (hash === 'sdr-queue' || hash === 'sdr') setActiveTab('SDR Queue');
       else if (hash === 'leads') setActiveTab('Leads');
@@ -127,28 +147,28 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
 
-  // If on Landing page, render Landing with quick dashboard launch banner
+  // Landing Page
   if (activeTab === 'Landing') {
     return (
       <div>
         <div style={{ background: 'var(--ink)', color: '#fff', padding: '8px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', borderBottom: '1px solid var(--dark-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="role-badge superadmin">Multi-Tenant Platform</span>
-            <span>Logged in as <strong>{session.userName}</strong> ({session.tenantName})</span>
+            <span className="role-badge superadmin">Unified Revenue Engine</span>
+            <span>Organization: <strong>{session.tenantName}</strong> ({session.userName})</span>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
               onClick={() => setIsAuthModalOpen(true)}
               style={{ background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
             >
-              Switch Tenant / Role
+              Switch Workspace
             </button>
             <button
               onClick={() => navigateTo('Ops Hub')}
               className="btn-accent"
               style={{ padding: '4px 12px', fontSize: '12px' }}
             >
-              Enter Dashboard <ArrowRight size={14} />
+              Launch Engine <ArrowRight size={14} />
             </button>
           </div>
         </div>
@@ -179,7 +199,7 @@ export default function App() {
             <div className="brand-icon">Z</div>
             <div>
               <div style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.1 }}>ZEEROCODES</div>
-              <div style={{ fontSize: '10.5px', color: 'var(--muted)', fontWeight: 600 }}>REVENUE ENGINE</div>
+              <div style={{ fontSize: '10px', color: 'var(--muted)', fontWeight: 600 }}>REVENUE ENGINE</div>
             </div>
           </div>
 
@@ -193,10 +213,10 @@ export default function App() {
                   className={`nav-tab-btn ${active ? 'active' : ''}`}
                   onClick={() => navigateTo(item.id)}
                 >
-                  <Icon size={15} />
+                  <Icon size={14} />
                   <span>{item.label}</span>
                   {item.badge && (
-                    <span style={{ fontSize: '10px', background: 'var(--ink)', color: 'var(--accent)', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>
+                    <span style={{ fontSize: '9.5px', background: 'var(--ink)', color: 'var(--accent)', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>
                       {item.badge}
                     </span>
                   )}
@@ -224,15 +244,7 @@ export default function App() {
             style={{ padding: '7px 12px', fontSize: '12px' }}
             onClick={() => navigateTo('Landing')}
           >
-            Landing Page
-          </button>
-
-          <button
-            className="btn-secondary"
-            style={{ padding: '8px', display: 'none' }}
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          >
-            <Menu size={18} />
+            Landing
           </button>
         </div>
       </header>
@@ -241,9 +253,13 @@ export default function App() {
       <main style={{ flex: 1 }}>
         {activeTab === 'Ops Hub' && <OperationalDashboard session={session} onNavigate={navigateTo} />}
         {activeTab === 'Client Portal' && <ClientDashboard session={session} onNavigate={navigateTo} />}
+        {activeTab === 'Inbox' && <UnifiedInboxWorkspace session={session} />}
         {activeTab === 'Pipeline' && <SalesPipelineWorkspace session={session} />}
-        {activeTab === 'Activities' && <ActivitiesWorkspace session={session} />}
+        {activeTab === 'Follow-ups' && <FollowUpCadenceWorkspace session={session} />}
         {activeTab === 'SDR Queue' && <SdrQueueWorkspace />}
+        {activeTab === 'Integrations' && <IntegrationsHubWorkspace session={session} />}
+        {activeTab === 'Templates' && <TemplatesWorkspace session={session} />}
+        {activeTab === 'Activities' && <ActivitiesWorkspace session={session} />}
         {activeTab === 'Leads' && <LeadWorkspace />}
         {activeTab === 'Lead Sources' && <LeadSourcesWorkspace />}
         {activeTab === 'Revenue' && <RevenueAttributionWorkspace />}
