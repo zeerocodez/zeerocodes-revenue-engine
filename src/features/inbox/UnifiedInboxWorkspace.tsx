@@ -1,40 +1,60 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   AlertCircle,
+  ArrowRight,
   Bot,
+  Briefcase,
   Calendar,
   Check,
   CheckCheck,
+  CheckCircle2,
   Clock,
+  Copy,
+  DollarSign,
+  Download,
   Edit3,
+  ExternalLink,
   Filter,
   Flame,
+  Globe,
+  Headphones,
   HelpCircle,
   History,
+  Info,
+  Laptop,
+  Layers,
   MessageSquare,
+  Mic,
+  MicOff,
   Paperclip,
   Phone,
   PhoneCall,
+  Play,
   Plus,
+  RefreshCw,
   Search,
   Send,
+  Shield,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Tag,
   User,
   UserCheck,
   UserX,
+  Volume2,
   X,
   Zap,
 } from 'lucide-react';
 import type { UserSession } from '../auth/AuthModal';
 
-interface ConversationThread {
+export interface ConversationThread {
   id: string;
   leadName: string;
   companyName: string;
+  serviceCategory: string;
   phone: string;
-  channel: 'whatsapp' | 'sms' | 'email' | 'web';
+  channel: 'whatsapp' | 'voice' | 'sms' | 'email';
   qualificationScore: number;
   urgencyDays: number;
   dealValue: number;
@@ -42,54 +62,74 @@ interface ConversationThread {
   lastMessageTime: string;
   unreadCount: number;
   state: 'qualifying' | 'engaged' | 'booked' | 'contacting' | 'human_takeover';
-  assignedRep: string;
+  assignedSetter: string;
   isHumanControlled: boolean;
-  aiSuggestedReply: string;
+  speedToLeadSeconds: number;
+  aiSetterIntelligence: {
+    summary: string;
+    painPoints: string[];
+    statedBudget: string;
+    decisionMakerRole: string;
+    suggestedScript: {
+      openingHook: string;
+      valueBridge: string;
+      objectionHandler: string;
+      closingCTA: string;
+    };
+    nextStep: string;
+  };
   timeline: {
     time: string;
     action: string;
     badge?: string;
     details: string;
   }[];
-  auditTrail: {
-    date: string;
-    actor: string;
-    action: string;
-    reason: string;
-  }[];
   messages: {
     id: string;
-    sender: 'lead' | 'ai' | 'agent';
+    sender: 'lead' | 'ai' | 'setter';
     body: string;
     timestamp: string;
   }[];
 }
 
-const INITIAL_THREADS: ConversationThread[] = [
+const INITIAL_CONVERSATIONS: ConversationThread[] = [
   {
     id: 'conv_1',
     leadName: 'Engr. Babatunde Jinadu',
     companyName: 'Prime Construct Ltd',
+    serviceCategory: 'Management Consulting & Facilities',
     phone: '+234 803 123 4567',
     channel: 'whatsapp',
-    qualificationScore: 88,
+    qualificationScore: 92,
     urgencyDays: 2,
-    dealValue: 2500000,
+    dealValue: 5500000,
     lastMessage: 'Yes, I am the MD and we need this implemented by next week. What does onboarding look like?',
-    lastMessageTime: '3m ago',
+    lastMessageTime: 'Just now',
     unreadCount: 1,
     state: 'qualifying',
-    assignedRep: 'Emeka Nwosu',
+    assignedSetter: 'Emeka Nwosu',
     isHumanControlled: false,
-    aiSuggestedReply: 'Hello Engr. Babatunde! Onboarding takes under 48 hours with our dedicated solutions architect. Would you like me to book a 15-minute deployment walkthrough today at 2:30 PM?',
+    speedToLeadSeconds: 24,
+    aiSetterIntelligence: {
+      summary: 'High-intent MD at Prime Construct looking for rapid multi-site operations consulting & automation for 400+ leads/mo. Budget is pre-allocated (₦5.5M).',
+      painPoints: ['Sales reps cannot keep up with 400+ leads/mo', 'High revenue leakage on slow response times', 'Need 14-day rollout'],
+      statedBudget: '₦5,500,000 approved',
+      decisionMakerRole: 'Managing Director (Sole Authority)',
+      suggestedScript: {
+        openingHook: '“Hello Engr. Babatunde, this is Emeka from Zeerocodes. I reviewed your 400 lead/month scaling plan with our AI triage.”',
+        valueBridge: '“We deployed this exact 45-second pipeline for a major developer last month, cutting lead drop-off by 73% in 14 days.”',
+        objectionHandler: '“If onboarding speed is your primary metric, our Solutions Director handles live DNS & CRM integration within 48 hours.”',
+        closingCTA: '“Let’s lock in a 15-minute executive walkthrough today at 2:30 PM so you see the live revenue dashboard in action.”',
+      },
+      nextStep: 'Confirm Google Meet demo slot for today at 2:30 PM.',
+    },
     timeline: [
-      { time: '10:14:02', action: 'Lead entered via Meta Lead Ads', badge: 'Webhook', details: 'Auto-ingested from Campaign: Q3 High-Growth Scale' },
-      { time: '10:14:08', action: 'AI Fast-Response Dispatched', badge: '6s latency', details: 'Automated introductory message sent on WhatsApp' },
-      { time: '10:16:15', action: 'Lead replied with requirement', details: 'Volume: 400 inbound leads/mo' },
-      { time: '10:17:30', action: 'AI Policy Qualification Engine', badge: 'Score: 88', details: 'Budget fit verified (₦2.5M). Decision Maker confirmed (MD).' },
-      { time: '10:19:00', action: 'High-Intent Booking Triggered', details: 'Ready for Closer demonstration booking' },
+      { time: '10:14:02', action: 'Lead entered via Meta Lead Ads', badge: 'Webhook', details: 'Auto-ingested from Campaign: High-Ticket B2B Scaling' },
+      { time: '10:14:26', action: '⚡ Instant AI WhatsApp Strike Dispatched', badge: '24s latency', details: 'Introductory qualification sequence triggered' },
+      { time: '10:16:15', action: 'Lead replied with volume specs', details: 'Volume: 400 inbound leads/mo' },
+      { time: '10:17:30', action: 'AI Policy Qualification Engine', badge: 'Score: 92 (UNICORN)', details: 'Budget fit verified (₦5.5M). Decision Maker confirmed (MD).' },
+      { time: '10:19:00', action: 'High-Intent Setter Package Generated', details: 'Custom script synthesized and pushed to SDR queue' },
     ],
-    auditTrail: [],
     messages: [
       { id: 'm1', sender: 'ai', body: 'Hello Engr. Babatunde! Thank you for requesting a demo of the Zeerocodes Revenue Growth Engine. Are you looking to automate lead qualification for Prime Construct Ltd?', timestamp: '10:14 AM' },
       { id: 'm2', sender: 'lead', body: 'Yes, we are currently receiving over 400 inbound leads a month and our sales team cannot keep up.', timestamp: '10:16 AM' },
@@ -101,27 +141,40 @@ const INITIAL_THREADS: ConversationThread[] = [
     id: 'conv_2',
     leadName: 'Dr. Amina Bello',
     companyName: 'Apex Health Systems',
+    serviceCategory: 'Specialist Healthcare & Clinics',
     phone: '+234 812 987 6543',
     channel: 'whatsapp',
-    qualificationScore: 92,
+    qualificationScore: 89,
     urgencyDays: 0,
     dealValue: 4800000,
     lastMessage: 'Let us do tomorrow at 10:00 AM on Google Meet. Please send the link.',
     lastMessageTime: '15m ago',
     unreadCount: 0,
     state: 'booked',
-    assignedRep: 'Folake Adeleke',
+    assignedSetter: 'Folake Adeleke',
     isHumanControlled: false,
-    aiSuggestedReply: 'Calendar invite confirmed for tomorrow at 10:00 AM. A meeting link and executive brief have been sent to your email.',
+    speedToLeadSeconds: 31,
+    aiSetterIntelligence: {
+      summary: 'Medical Director seeking automated patient triage and consultation bookings across 3 clinic branches.',
+      painPoints: ['Front desk missing after-hours patient inquiries', 'High no-show rates on specialist consultations'],
+      statedBudget: '₦4,800,000 annual',
+      decisionMakerRole: 'Medical Director',
+      suggestedScript: {
+        openingHook: '“Dr. Amina, this is Folake following up on your automated clinic concierge booking.”',
+        valueBridge: '“Our bi-directional EHR calendar sync eliminates patient double-booking while providing 24/7 instant WhatsApp confirmation.”',
+        objectionHandler: '“The system integrates directly with your existing Google Calendar / WhatsApp Business without replacing staff.”',
+        closingCTA: '“I have reserved tomorrow 10:00 AM with our Lead Healthcare Architect. Link dispatched.”',
+      },
+      nextStep: 'Dispatch 24h & 2h WhatsApp reminders before Google Meet.',
+    },
     timeline: [
       { time: '09:41:00', action: 'Website Form Submission', badge: 'Webhook', details: 'Requested Enterprise Multi-Clinic Rollout' },
-      { time: '09:41:06', action: 'AI Initial Triage', badge: '5s latency', details: 'Verified Medical Director role & budget' },
-      { time: '09:45:10', action: 'AI Qualification Verified', badge: 'Score: 92', details: 'Immediate purchase window within 48 hours' },
+      { time: '09:41:31', action: '⚡ Instant AI WhatsApp Strike', badge: '31s latency', details: 'Verified Medical Director role & clinic volume' },
+      { time: '09:45:10', action: 'AI Qualification Verified', badge: 'Score: 89', details: 'Immediate purchase window within 48 hours' },
       { time: '10:05:22', action: 'Demo Slot Confirmed', badge: 'Booked', details: 'Tomorrow 10:00 AM Google Meet with Folake Adeleke' },
     ],
-    auditTrail: [],
     messages: [
-      { id: 'm2_1', sender: 'ai', body: 'Dr. Amina, we have an opening tomorrow morning with our Enterprise Closer.', timestamp: '09:45 AM' },
+      { id: 'm2_1', sender: 'ai', body: 'Dr. Amina, we have an opening tomorrow morning with our Enterprise Specialist Closer.', timestamp: '09:45 AM' },
       { id: 'm2_2', sender: 'lead', body: 'Let us do tomorrow at 10:00 AM on Google Meet. Please send the link.', timestamp: '10:05 AM' },
     ],
   },
@@ -129,123 +182,103 @@ const INITIAL_THREADS: ConversationThread[] = [
     id: 'conv_3',
     leadName: 'Kelechi Okafor',
     companyName: 'Swift Logistics Group',
+    serviceCategory: 'IT & Fleet Logistics Services',
     phone: '+234 901 444 8899',
     channel: 'sms',
-    qualificationScore: 54,
-    urgencyDays: 7,
+    qualificationScore: 62,
+    urgencyDays: 5,
     dealValue: 3200000,
-    lastMessage: 'Can someone call me directly to explain the setup?',
+    lastMessage: 'Can someone call me directly to explain how dispatch automation works?',
     lastMessageTime: '1h ago',
     unreadCount: 1,
     state: 'human_takeover',
-    assignedRep: 'Sarah Alabi',
+    assignedSetter: 'Sarah Alabi',
     isHumanControlled: true,
-    aiSuggestedReply: 'Hi Kelechi, Sarah from Zeerocodes here. I can call your number right now. Is +234 901 444 8899 the best line?',
+    speedToLeadSeconds: 42,
+    aiSetterIntelligence: {
+      summary: 'Fleet Director interested in dispatch automation but requested live phone clarification before committing.',
+      painPoints: ['Manual dispatch delays during peak shipping hours', 'Needs voice confirmation before signing'],
+      statedBudget: '₦3,200,000 project budget',
+      decisionMakerRole: 'Head of Fleet Operations',
+      suggestedScript: {
+        openingHook: '“Hi Kelechi, Sarah from Zeerocodes calling as requested regarding your fleet dispatch automation.”',
+        valueBridge: '“We connect your WhatsApp inquiries directly into automated dispatch tickets in under 3 seconds.”',
+        objectionHandler: '“We can set up a live 3-day pilot on 10 of your fleet trucks so you verify reliability first.”',
+        closingCTA: '“Let’s do a quick 10-minute screen share right now to show you the driver dispatch view.”',
+      },
+      nextStep: 'Initiate outbound phone call via Vapi Voice Agent or direct line.',
+    },
     timeline: [
       { time: '08:30:12', action: 'Lead Entered from Google Search Ads', badge: 'Webhook', details: 'Logistics Fleet Inbound' },
-      { time: '08:30:18', action: 'AI Initial Outreach Dispatched', details: 'SMS channel verification' },
-      { time: '09:12:00', action: 'Human Assistance Requested', badge: 'Escalation', details: 'Lead requested direct phone call' },
-      { time: '09:12:45', action: 'Human Takeover Activated', badge: 'SDR Mode', details: 'Assigned to Sarah Alabi • AI Auto-pilot paused' },
-    ],
-    auditTrail: [
-      { date: '17 Sept 2026 09:12', actor: 'Sarah Alabi', action: 'Takeover Conversation', reason: 'Lead explicitly requested human phone call' },
+      { time: '08:30:54', action: '⚡ Instant AI SMS Strike', badge: '42s latency', details: 'SMS channel verification sent' },
+      { time: '09:12:00', action: 'Human Call Requested', badge: 'Escalation', details: 'Lead requested direct phone call' },
+      { time: '09:12:45', action: 'Human Takeover Activated', badge: 'Setter Mode', details: 'Assigned to Sarah Alabi • AI Auto-pilot paused' },
     ],
     messages: [
       { id: 'm3_1', sender: 'ai', body: 'Hi Kelechi, thanks for contacting Zeerocodes. Are you looking to streamline dispatch and tracking inquiries?', timestamp: '08:30 AM' },
-      { id: 'm3_2', sender: 'lead', body: 'Can someone call me directly to explain the setup?', timestamp: '09:12 AM' },
+      { id: 'm3_2', sender: 'lead', body: 'Can someone call me directly to explain how dispatch automation works?', timestamp: '09:12 AM' },
     ],
   },
 ];
 
-interface UnifiedInboxWorkspaceProps {
-  session: UserSession;
-}
+export default function UnifiedInboxWorkspace({ session }: { session?: UserSession }) {
+  const [threads, setThreads] = useState<ConversationThread[]>(INITIAL_CONVERSATIONS);
+  const [selectedThreadId, setSelectedThreadId] = useState<string>('conv_1');
+  const [replyInput, setReplyInput] = useState('');
+  const [channelFilter, setChannelFilter] = useState<'all' | 'whatsapp' | 'voice' | 'sms'>('all');
+  const [activeRightTab, setActiveRightTab] = useState<'script' | 'timeline' | 'voice_hub'>('script');
+  const [isVoiceCallActive, setIsVoiceCallActive] = useState(false);
+  const [voiceCallDuration, setVoiceCallDuration] = useState(0);
+  const [isSimulatingLead, setIsSimulatingLead] = useState(false);
 
-export default function UnifiedInboxWorkspace({ session }: UnifiedInboxWorkspaceProps) {
-  const [threads, setThreads] = useState<ConversationThread[]>(INITIAL_THREADS);
-  const [activeThreadId, setActiveThreadId] = useState<string>(INITIAL_THREADS[0].id);
-  const [filterChannel, setFilterChannel] = useState<string>('all');
-  const [messageInput, setMessageInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeRightTab, setActiveRightTab] = useState<'profile' | 'timeline' | 'audit'>('profile');
+  const selectedThread = threads.find((t) => t.id === selectedThreadId) || threads[0];
 
-  // Override Qualification Modal State
-  const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
-  const [overrideScore, setOverrideScore] = useState(90);
-  const [overrideReason, setOverrideReason] = useState('Strategic enterprise client with high expansion potential.');
+  // Voice Call Timer Effect
+  useEffect(() => {
+    let interval: any;
+    if (isVoiceCallActive) {
+      interval = setInterval(() => {
+        setVoiceCallDuration((d) => d + 1);
+      }, 1000);
+    } else {
+      setVoiceCallDuration(0);
+    }
+    return () => clearInterval(interval);
+  }, [isVoiceCallActive]);
 
-  const activeThread = threads.find((t) => t.id === activeThreadId) || threads[0];
-
-  const filteredThreads = threads.filter((t) => {
-    const matchChannel = filterChannel === 'all' || t.channel === filterChannel;
-    const matchSearch =
-      t.leadName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.companyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.phone.includes(searchQuery);
-    return matchChannel && matchSearch;
-  });
-
-  const handleSendMessage = (textToSend?: string) => {
-    const body = (textToSend || messageInput).trim();
-    if (!body) return;
-
-    const newMessage = {
-      id: `m_${Date.now()}`,
-      sender: 'agent' as const,
-      body,
+  const handleSendMessage = () => {
+    if (!replyInput.trim()) return;
+    const newMsg = {
+      id: `msg_${Date.now()}`,
+      sender: (selectedThread.isHumanControlled ? 'setter' : 'ai') as 'setter' | 'ai',
+      body: replyInput.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
     setThreads((prev) =>
-      prev.map((t) =>
-        t.id === activeThread.id
-          ? {
-              ...t,
-              lastMessage: body,
-              lastMessageTime: 'Just now',
-              messages: [...t.messages, newMessage],
-            }
-          : t
-      )
+      prev.map((t) => (t.id === selectedThread.id ? { ...t, messages: [...t.messages, newMsg], lastMessage: newMsg.body, lastMessageTime: 'Just now' } : t))
     );
-
-    setMessageInput('');
+    setReplyInput('');
   };
 
-  const handleApplyAISuggestion = () => {
-    if (activeThread.aiSuggestedReply) {
-      setMessageInput(activeThread.aiSuggestedReply);
-    }
-  };
-
-  const handleToggleHumanTakeover = () => {
-    const nextControlled = !activeThread.isHumanControlled;
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-
+  const handleTakeoverToggle = () => {
     setThreads((prev) =>
       prev.map((t) => {
-        if (t.id === activeThread.id) {
-          const newTimelineItem = {
-            time: now,
-            action: nextControlled ? 'Human Takeover Activated' : 'AI Autopilot Resumed',
-            badge: nextControlled ? 'Human SDR' : 'AI Active',
-            details: nextControlled
-              ? `Rep ${session.userName} took over live conversation.`
-              : 'AI auto-response and qualification engine re-engaged.',
-          };
-          const newAuditItem = {
-            date: `${today} ${now}`,
-            actor: session.userName,
-            action: nextControlled ? 'Manual Takeover' : 'Release to AI',
-            reason: nextControlled ? 'Agent intervention for direct closing' : 'Standard qualification flow restored',
-          };
+        if (t.id === selectedThread.id) {
+          const nextControlled = !t.isHumanControlled;
           return {
             ...t,
             isHumanControlled: nextControlled,
-            state: nextControlled ? 'human_takeover' : 'engaged',
-            timeline: [...t.timeline, newTimelineItem],
-            auditTrail: [newAuditItem, ...t.auditTrail],
+            state: nextControlled ? 'human_takeover' : 'qualifying',
+            timeline: [
+              ...t.timeline,
+              {
+                time: new Date().toLocaleTimeString(),
+                action: nextControlled ? 'Human Setter Takeover' : 'Switched back to AI Auto-pilot',
+                badge: nextControlled ? 'Setter Active' : 'AI Active',
+                details: nextControlled ? `Taken over by ${session?.userName || 'Setter Rep'}` : 'AI bot resumed conversation',
+              },
+            ],
           };
         }
         return t;
@@ -253,211 +286,299 @@ export default function UnifiedInboxWorkspace({ session }: UnifiedInboxWorkspace
     );
   };
 
-  const handleConfirmOverride = () => {
-    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const handleSimulateInboundLeadStrike = () => {
+    setIsSimulatingLead(true);
+    const simulatedId = `conv_${Date.now()}`;
+    const newThread: ConversationThread = {
+      id: simulatedId,
+      leadName: 'Chief Kunle Adelekan',
+      companyName: 'Adelekan Capital & Advisory',
+      serviceCategory: 'Management Consulting & Corporate Advisory',
+      phone: '+234 802 555 9900',
+      channel: 'whatsapp',
+      qualificationScore: 94,
+      urgencyDays: 1,
+      dealValue: 7500000,
+      lastMessage: 'We need restructuring advisory for our subsidiary in Abuja. Can your lead partner call today?',
+      lastMessageTime: 'Just now',
+      unreadCount: 1,
+      state: 'qualifying',
+      assignedSetter: session?.userName || 'Sarah Alabi',
+      isHumanControlled: false,
+      speedToLeadSeconds: 18,
+      aiSetterIntelligence: {
+        summary: 'Chief Executive seeking immediate advisory for Abuja corporate subsidiary. ₦7.5M budget ready.',
+        painPoints: ['Needs fast turnaround before Q4 board audit', 'Requires lead partner presentation'],
+        statedBudget: '₦7,500,000 approved',
+        decisionMakerRole: 'Chief Executive / Chairman',
+        suggestedScript: {
+          openingHook: '“Chief Adelekan, good day. Emeka from Zeerocodes following up on your Abuja subsidiary inquiry.”',
+          valueBridge: '“Our Senior Corporate Advisory Lead specializes in multi-entity financial & operational turnaround.”',
+          objectionHandler: '“We can execute the preliminary memorandum within 5 business days.”',
+          closingCTA: '“I can arrange a confidential partner call today at 4:00 PM on Google Meet.”',
+        },
+        nextStep: 'Dispatch confidential NDA and book Google Meet for 4:00 PM.',
+      },
+      timeline: [
+        { time: '11:20:00', action: 'Lead Submitted Meta Inbound Ad Form', badge: 'Webhook', details: 'Campaign: Corporate Restructuring High-Ticket' },
+        { time: '11:20:18', action: '⚡ Instant AI WhatsApp Strike Dispatched', badge: '18s latency', details: 'Automated 45-second outreach executed' },
+        { time: '11:21:05', action: 'AI Policy Qualification Engine', badge: 'Score: 94 (UNICORN)', details: 'Budget fit verified (₦7.5M). Chairman authority confirmed.' },
+      ],
+      messages: [
+        { id: 'm_new1', sender: 'ai', body: 'Hello Chief Adelekan, thank you for reaching out to Zeerocodes Corporate Advisory. Are you looking to restructure an active enterprise?', timestamp: '11:20 AM' },
+        { id: 'm_new2', sender: 'lead', body: 'We need restructuring advisory for our subsidiary in Abuja. Can your lead partner call today?', timestamp: '11:21 AM' },
+      ],
+    };
 
-    setThreads((prev) =>
-      prev.map((t) => {
-        if (t.id === activeThread.id) {
-          const newTimelineItem = {
-            time: now,
-            action: `Qualification Score Overridden: ${overrideScore}/100`,
-            badge: 'Admin Override',
-            details: `Reason: ${overrideReason}`,
-          };
-          const newAuditItem = {
-            date: `${today} ${now}`,
-            actor: session.userName,
-            action: `Score Override (${t.qualificationScore} -> ${overrideScore})`,
-            reason: overrideReason,
-          };
-          return {
-            ...t,
-            qualificationScore: overrideScore,
-            state: overrideScore >= 75 ? 'qualifying' : 'contacting',
-            timeline: [...t.timeline, newTimelineItem],
-            auditTrail: [newAuditItem, ...t.auditTrail],
-          };
-        }
-        return t;
-      })
-    );
+    setTimeout(() => {
+      setThreads((prev) => [newThread, ...prev]);
+      setSelectedThreadId(simulatedId);
+      setIsSimulatingLead(false);
+    }, 600);
+  };
 
-    setIsOverrideModalOpen(false);
+  const handleTriggerVapiVoiceCall = () => {
+    setIsVoiceCallActive(true);
+    setActiveRightTab('voice_hub');
+  };
+
+  const handleEndVapiVoiceCall = () => {
+    setIsVoiceCallActive(false);
+    alert('📞 Voice Call completed! Full transcript, AI sentiment (Enthusiastic), and recording saved to lead file.');
   };
 
   return (
-    <div className="dashboard-canvas" style={{ height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column' }}>
-      {/* View Header */}
+    <div className="dashboard-canvas">
+      {/* Top Header & Speed-to-Lead Guarantee Bar */}
       <div className="view-header" style={{ marginBottom: '16px' }}>
         <div className="view-title-group">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-            <span className="role-badge superadmin">Multi-Channel Ingestion & AI Stream</span>
-            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Tenant: <strong>{session.tenantName}</strong></span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span className="role-badge superadmin" style={{ background: '#10b981', color: '#fff' }}>LIVE CONVERSATION ENGINE</span>
+            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Tenant: <strong>{session?.tenantName || 'Zeerocodes Enterprise'}</strong></span>
           </div>
-          <h1 style={{ fontSize: '22px' }}>
-            Unified Live Conversation Stream
-            <span style={{ fontSize: '12px', background: 'rgba(199, 255, 85, 0.2)', color: 'var(--accent-deep)', padding: '2px 8px', borderRadius: '999px', fontWeight: 700 }}>
-              WhatsApp • SMS • Email • Web
-            </span>
+          <h1 style={{ fontSize: '26px', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase' }}>
+            SPEED-TO-LEAD <span style={{ color: '#10b981' }}>LIVE STREAM</span>
           </h1>
+          <p style={{ fontSize: '12px', color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>
+            ⚡ 45-SECOND OUTREACH GUARANTEE • AUTOMATED AI WHATSAPP & VOICE DISPATCH • SETTER HANDOFF INTELLIGENCE
+          </p>
         </div>
 
-        <div className="view-actions">
-          <div className="nav-tabs" style={{ background: 'var(--white)' }}>
-            {(['all', 'whatsapp', 'sms', 'email'] as const).map((ch) => (
-              <button
-                key={ch}
-                className={`nav-tab-btn ${filterChannel === ch ? 'active' : ''}`}
-                onClick={() => setFilterChannel(ch)}
-                style={{ padding: '5px 10px', fontSize: '12px', textTransform: 'capitalize' }}
-              >
-                {ch === 'all' ? 'All Channels' : ch}
-              </button>
-            ))}
-          </div>
+        <div className="view-actions" style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={handleSimulateInboundLeadStrike}
+            disabled={isSimulatingLead}
+            className="btn-accent"
+            style={{
+              background: '#10b981',
+              color: '#fff',
+              border: 'none',
+              padding: '9px 18px',
+              fontSize: '12.5px',
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+            }}
+          >
+            {isSimulatingLead ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
+            <span>⚡ Simulate Inbound Lead (&lt;45s Strike)</span>
+          </button>
         </div>
       </div>
 
-      {/* 3-Column Inbox Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr 340px', gap: '16px', flex: 1, minHeight: 0 }}>
-        {/* Left: Threads Sidebar */}
-        <div className="table-card" style={{ display: 'flex', flexDirection: 'column', margin: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '12px', borderBottom: '1px solid var(--line)' }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
-              <input
-                type="text"
-                placeholder="Search conversations..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '7px 10px 7px 32px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--line)',
-                  fontSize: '12.5px',
-                  outline: 'none',
-                }}
-              />
-            </div>
+      {/* Speed to Lead SLA Banner */}
+      <div
+        style={{
+          background: 'rgba(16, 185, 129, 0.08)',
+          border: '1px solid rgba(16, 185, 129, 0.25)',
+          borderRadius: '10px',
+          padding: '12px 18px',
+          marginBottom: '18px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
+          <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--ink)' }}>
+            Speed-to-Lead Performance: <span style={{ color: '#059669' }}>26.4s Avg Response Latency</span> (Target: &lt;45s)
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: 'var(--muted)' }}>
+          <span>Meta Lead Ads Webhook: <strong style={{ color: '#059669' }}>Active (0ms delay)</strong></span>
+          <span>WhatsApp Cloud API: <strong style={{ color: '#059669' }}>Connected</strong></span>
+          <span>Vapi Outbound Telephony: <strong style={{ color: '#059669' }}>Ready</strong></span>
+        </div>
+      </div>
+
+      {/* Main 3-Column Workspace */}
+      <div style={{ display: 'grid', gridTemplateColumns: '320px 1.4fr 1.1fr', gap: '18px', minHeight: '620px' }}>
+        {/* Left Column: Conversation Thread Selector */}
+        <div className="card" style={{ padding: '16px', border: '1px solid var(--line)', borderRadius: '12px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 800, textTransform: 'uppercase' }}>Active Inbound Leads ({threads.length})</h3>
+            <span style={{ fontSize: '11px', color: 'var(--muted)' }}>Live Queue</span>
           </div>
 
-          <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column' }}>
-            {filteredThreads.map((thread) => {
-              const active = thread.id === activeThread.id;
-              return (
-                <div
-                  key={thread.id}
-                  onClick={() => setActiveThreadId(thread.id)}
-                  style={{
-                    padding: '12px 14px',
-                    borderBottom: '1px solid var(--line)',
-                    background: active ? 'rgba(199, 255, 85, 0.12)' : 'var(--white)',
-                    borderLeft: active ? '3px solid var(--ink)' : '3px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink)' }}>{thread.leadName}</span>
-                    <span style={{ fontSize: '11px', color: 'var(--muted)' }}>{thread.lastMessageTime}</span>
-                  </div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginBottom: '6px' }}>
-                    🏢 {thread.companyName}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {thread.lastMessage}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
-                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                      <span className="status-pill" style={{ fontSize: '10px', padding: '1px 6px', background: thread.channel === 'whatsapp' ? '#dcfce7' : '#e0f2fe', color: thread.channel === 'whatsapp' ? '#166534' : '#0369a1' }}>
-                        {thread.channel.toUpperCase()}
+          {/* Filter Pills */}
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+            {(['all', 'whatsapp', 'voice', 'sms'] as const).map((ch) => (
+              <button
+                key={ch}
+                onClick={() => setChannelFilter(ch)}
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: channelFilter === ch ? '1px solid #10b981' : '1px solid var(--line)',
+                  background: channelFilter === ch ? '#10b981' : 'var(--bg)',
+                  color: channelFilter === ch ? '#fff' : 'var(--ink)',
+                  cursor: 'pointer',
+                }}
+              >
+                {ch}
+              </button>
+            ))}
+          </div>
+
+          {/* Thread List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1 }}>
+            {threads
+              .filter((t) => channelFilter === 'all' || t.channel === channelFilter)
+              .map((thread) => {
+                const isSelected = selectedThread.id === thread.id;
+                return (
+                  <div
+                    key={thread.id}
+                    onClick={() => setSelectedThreadId(thread.id)}
+                    style={{
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: isSelected ? '1px solid #10b981' : '1px solid var(--line)',
+                      background: isSelected ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+                      <strong style={{ fontSize: '13px', color: 'var(--ink)' }}>{thread.leadName}</strong>
+                      <span
+                        style={{
+                          fontSize: '10.5px',
+                          fontWeight: 800,
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background: thread.qualificationScore >= 90 ? '#10b981' : '#ff5722',
+                          color: '#fff',
+                        }}
+                      >
+                        {thread.qualificationScore >= 90 ? 'UNICORN' : 'QUALIFIED'} {thread.qualificationScore}
                       </span>
-                      {thread.isHumanControlled && (
-                        <span style={{ fontSize: '9.5px', background: '#fee2e2', color: '#991b1b', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
-                          HUMAN
-                        </span>
-                      )}
                     </div>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#16a34a' }}>
-                      ₦{thread.dealValue.toLocaleString()}
-                    </span>
+
+                    <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginBottom: '6px' }}>
+                      {thread.companyName} • <span style={{ color: '#059669', fontWeight: 600 }}>⚡ {thread.speedToLeadSeconds}s contact</span>
+                    </div>
+
+                    <div style={{ fontSize: '11.5px', color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontStyle: 'italic' }}>
+                      "{thread.lastMessage}"
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
 
-        {/* Center: Live Conversation Thread */}
-        <div className="table-card" style={{ display: 'flex', flexDirection: 'column', margin: 0, overflow: 'hidden' }}>
-          {/* Thread Header */}
-          <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--paper)' }}>
+        {/* Center Column: Live Conversation Stream (WhatsApp / Voice Chat) */}
+        <div className="card" style={{ padding: '18px', border: '1px solid var(--line)', borderRadius: '12px', display: 'flex', flexDirection: 'column' }}>
+          {/* Header of Active Thread */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--line)', paddingBottom: '12px', marginBottom: '14px' }}>
             <div>
-              <div style={{ fontSize: '14.5px', fontWeight: 800, color: 'var(--ink)' }}>{activeThread.leadName}</div>
-              <div style={{ fontSize: '11.5px', color: 'var(--muted)' }}>{activeThread.phone} • {activeThread.companyName}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800 }}>{selectedThread.leadName}</h3>
+                <span style={{ fontSize: '11px', background: 'rgba(16, 185, 129, 0.15)', color: '#059669', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
+                  {selectedThread.serviceCategory}
+                </span>
+              </div>
+              <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '2px' }}>
+                {selectedThread.companyName} • {selectedThread.phone} • Stated Deal: <strong>₦{selectedThread.dealValue.toLocaleString()}</strong>
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                onClick={handleToggleHumanTakeover}
-                className={activeThread.isHumanControlled ? 'btn-secondary' : 'btn-accent'}
-                style={{ padding: '5px 12px', fontSize: '12px', fontWeight: 700 }}
+                onClick={handleTakeoverToggle}
+                className="btn-secondary"
+                style={{
+                  fontSize: '11.5px',
+                  padding: '6px 12px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  border: selectedThread.isHumanControlled ? '1px solid #ff5722' : '1px solid var(--line)',
+                  color: selectedThread.isHumanControlled ? '#ff5722' : 'var(--ink)',
+                }}
               >
-                {activeThread.isHumanControlled ? (
-                  <>
-                    <Bot size={13} /> Resume AI Autopilot
-                  </>
-                ) : (
-                  <>
-                    <User size={13} /> Take Over Conversation
-                  </>
-                )}
+                {selectedThread.isHumanControlled ? <UserCheck size={14} /> : <Bot size={14} />}
+                <span>{selectedThread.isHumanControlled ? 'Setter Active (Takeover)' : 'AI Auto-Pilot'}</span>
               </button>
 
-              <button className="btn-secondary" style={{ padding: '5px 10px', fontSize: '12px' }} onClick={() => alert(`Calling ${activeThread.phone}...`)}>
-                <PhoneCall size={13} /> Call
+              <button
+                onClick={handleTriggerVapiVoiceCall}
+                className="btn-accent"
+                style={{
+                  fontSize: '11.5px',
+                  padding: '6px 14px',
+                  fontWeight: 800,
+                  background: '#ff5722',
+                  color: '#fff',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <PhoneCall size={14} />
+                <span>Call Lead (Vapi AI)</span>
               </button>
             </div>
           </div>
 
-          {/* Human Takeover Notice Banner */}
-          {activeThread.isHumanControlled && (
-            <div style={{ background: '#fffbeb', borderBottom: '1px solid #fef3c7', padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', color: '#92400e' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <ShieldAlert size={14} color="#b45309" />
-                <span><strong>Human Control Active:</strong> AI auto-replies are paused. You are chatting directly with this lead.</span>
-              </div>
-            </div>
-          )}
-
-          {/* Messages Stream */}
-          <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--white)' }}>
-            {activeThread.messages.map((msg) => {
-              const isLead = msg.sender === 'lead';
+          {/* Chat Messages Stream */}
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '6px', marginBottom: '14px' }}>
+            {selectedThread.messages.map((msg) => {
               const isAi = msg.sender === 'ai';
+              const isLead = msg.sender === 'lead';
+              const isSetter = msg.sender === 'setter';
+
               return (
                 <div
                   key={msg.id}
                   style={{
                     alignSelf: isLead ? 'flex-start' : 'flex-end',
-                    maxWidth: '75%',
+                    maxWidth: '82%',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: isLead ? 'flex-start' : 'flex-end',
                   }}
                 >
-                  <div style={{ fontSize: '10.5px', color: 'var(--muted)', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {isAi && <Bot size={12} color="var(--accent-deep)" />}
-                    {isLead ? activeThread.leadName : isAi ? 'AI Qualification Orchestrator' : `${session.userName} (SDR Rep)`}
+                  <div style={{ fontSize: '10.5px', color: 'var(--muted)', marginBottom: '3px', fontWeight: 600 }}>
+                    {isLead ? selectedThread.leadName : isAi ? '⚡ Zeerocodes AI Agent (45s)' : `👤 Human Setter (${session?.userName || 'Rep'})`} • {msg.timestamp}
                   </div>
                   <div
                     style={{
-                      padding: '10px 14px',
-                      borderRadius: '12px',
-                      background: isLead ? 'var(--paper)' : isAi ? 'var(--dark)' : 'var(--ink)',
-                      color: isLead ? 'var(--ink)' : isAi ? 'var(--accent)' : '#fff',
+                      padding: '11px 15px',
+                      borderRadius: isLead ? '12px 12px 12px 2px' : '12px 12px 2px 12px',
+                      background: isLead ? 'var(--bg)' : isAi ? '#10b981' : '#ff5722',
+                      color: isLead ? 'var(--ink)' : '#fff',
                       border: isLead ? '1px solid var(--line)' : 'none',
                       fontSize: '13px',
                       lineHeight: 1.45,
@@ -466,299 +587,253 @@ export default function UnifiedInboxWorkspace({ session }: UnifiedInboxWorkspace
                   >
                     {msg.body}
                   </div>
-                  <span style={{ fontSize: '10px', color: 'var(--muted)', marginTop: '2px' }}>{msg.timestamp}</span>
                 </div>
               );
             })}
           </div>
 
-          {/* AI Smart Suggestion Bar */}
-          {activeThread.aiSuggestedReply && (
-            <div style={{ padding: '8px 16px', background: 'rgba(199, 255, 85, 0.15)', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--ink)', overflow: 'hidden' }}>
-                <Sparkles size={15} color="var(--accent-deep)" />
-                <span style={{ fontWeight: 700 }}>AI Next Action:</span>
-                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--muted)' }}>
-                  {activeThread.aiSuggestedReply}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleApplyAISuggestion}
-                className="btn-accent"
-                style={{ padding: '4px 10px', fontSize: '11.5px', whiteSpace: 'nowrap' }}
-              >
-                Use Suggestion
-              </button>
-            </div>
-          )}
-
-          {/* Message Input Box */}
-          <div style={{ padding: '14px 16px', borderTop: '1px solid var(--line)', background: 'var(--paper)', display: 'flex', gap: '10px' }}>
+          {/* Chat Reply Box */}
+          <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid var(--line)', paddingTop: '12px' }}>
             <input
               type="text"
-              placeholder={`Reply to ${activeThread.leadName} via ${activeThread.channel.toUpperCase()}...`}
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
+              value={replyInput}
+              onChange={(e) => setReplyInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+              placeholder={selectedThread.isHumanControlled ? 'Type message as Human Setter...' : 'Type message or use AI Suggestion below...'}
               style={{
                 flex: 1,
                 padding: '10px 14px',
                 borderRadius: '8px',
                 border: '1px solid var(--line)',
-                background: 'var(--white)',
+                background: 'var(--bg)',
+                color: 'var(--ink)',
                 fontSize: '13px',
-                outline: 'none',
               }}
             />
-            <button className="btn-primary" onClick={() => handleSendMessage()}>
-              <Send size={15} /> Send
+            <button
+              onClick={handleSendMessage}
+              className="btn-accent"
+              style={{ background: selectedThread.isHumanControlled ? '#ff5722' : '#10b981', color: '#fff', border: 'none', padding: '0 16px' }}
+            >
+              <Send size={15} />
             </button>
           </div>
         </div>
 
-        {/* Right: Lead Intelligence, Transparent AI Timeline & Audit Trail */}
-        <div className="dark-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', margin: 0, overflowY: 'auto' }}>
-          {/* Sub-tabs for intelligence sidebar */}
-          <div style={{ display: 'flex', gap: '4px', background: 'var(--dark-surface)', padding: '3px', borderRadius: '8px', border: '1px solid var(--dark-border)' }}>
+        {/* Right Column: Setter Handoff Intelligence Package & Vapi Telephony Hub */}
+        <div className="card" style={{ padding: '16px', border: '1px solid var(--line)', borderRadius: '12px', display: 'flex', flexDirection: 'column' }}>
+          {/* Tabs on Top of Right Column */}
+          <div style={{ display: 'flex', gap: '6px', borderBottom: '1px solid var(--line)', paddingBottom: '10px', marginBottom: '12px' }}>
             <button
-              onClick={() => setActiveRightTab('profile')}
+              onClick={() => setActiveRightTab('script')}
               style={{
-                flex: 1,
-                padding: '5px',
-                border: 'none',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                padding: '6px 12px',
                 borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: activeRightTab === 'profile' ? 700 : 500,
-                background: activeRightTab === 'profile' ? 'var(--dark-card)' : 'transparent',
-                color: activeRightTab === 'profile' ? 'var(--accent)' : 'var(--dark-muted)',
+                border: activeRightTab === 'script' ? '1px solid #ff5722' : '1px solid transparent',
+                background: activeRightTab === 'script' ? 'rgba(255, 87, 34, 0.1)' : 'transparent',
+                color: activeRightTab === 'script' ? '#ff5722' : 'var(--muted)',
                 cursor: 'pointer',
               }}
             >
-              Profile
+              🎯 Setter Script & Brief
             </button>
+
+            <button
+              onClick={() => setActiveRightTab('voice_hub')}
+              style={{
+                fontSize: '11.5px',
+                fontWeight: 700,
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: activeRightTab === 'voice_hub' ? '1px solid #ff5722' : '1px solid transparent',
+                background: activeRightTab === 'voice_hub' ? 'rgba(255, 87, 34, 0.1)' : 'transparent',
+                color: activeRightTab === 'voice_hub' ? '#ff5722' : 'var(--muted)',
+                cursor: 'pointer',
+              }}
+            >
+              📞 Vapi Telephony
+            </button>
+
             <button
               onClick={() => setActiveRightTab('timeline')}
               style={{
-                flex: 1,
-                padding: '5px',
-                border: 'none',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                padding: '6px 12px',
                 borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: activeRightTab === 'timeline' ? 700 : 500,
-                background: activeRightTab === 'timeline' ? 'var(--dark-card)' : 'transparent',
-                color: activeRightTab === 'timeline' ? 'var(--accent)' : 'var(--dark-muted)',
+                border: activeRightTab === 'timeline' ? '1px solid #ff5722' : '1px solid transparent',
+                background: activeRightTab === 'timeline' ? 'rgba(255, 87, 34, 0.1)' : 'transparent',
+                color: activeRightTab === 'timeline' ? '#ff5722' : 'var(--muted)',
                 cursor: 'pointer',
               }}
             >
-              AI Timeline
-            </button>
-            <button
-              onClick={() => setActiveRightTab('audit')}
-              style={{
-                flex: 1,
-                padding: '5px',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: activeRightTab === 'audit' ? 700 : 500,
-                background: activeRightTab === 'audit' ? 'var(--dark-card)' : 'transparent',
-                color: activeRightTab === 'audit' ? 'var(--accent)' : 'var(--dark-muted)',
-                cursor: 'pointer',
-              }}
-            >
-              Audit ({activeThread.auditTrail.length})
+              📜 Audit Timeline
             </button>
           </div>
 
-          {/* TAB 1: PROFILE */}
-          {activeRightTab === 'profile' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ borderBottom: '1px solid var(--dark-border)', paddingBottom: '8px' }}>
-                <div style={{ fontSize: '10.5px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase' }}>
-                  Intelligence Summary
+          {/* Tab 1: AI Setter Handoff Intelligence Package */}
+          {activeRightTab === 'script' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto', flex: 1 }}>
+              <div style={{ background: 'rgba(255, 87, 34, 0.06)', border: '1px solid rgba(255, 87, 34, 0.25)', borderRadius: '8px', padding: '12px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: '#ff5722', marginBottom: '4px' }}>
+                  • Executive Call Brief & Summary
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: 800, color: '#fff', marginTop: '2px' }}>
-                  {activeThread.leadName}
-                </div>
-                <div style={{ fontSize: '11.5px', color: 'var(--dark-muted)' }}>
-                  {activeThread.companyName}
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div style={{ background: 'var(--dark-surface)', padding: '10px', borderRadius: '8px', border: '1px solid var(--dark-border)' }}>
-                  <div style={{ fontSize: '10px', color: 'var(--dark-muted)', textTransform: 'uppercase' }}>AI Score</div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--accent)' }}>{activeThread.qualificationScore}/100</div>
-                </div>
-                <div style={{ background: 'var(--dark-surface)', padding: '10px', borderRadius: '8px', border: '1px solid var(--dark-border)' }}>
-                  <div style={{ fontSize: '10px', color: 'var(--dark-muted)', textTransform: 'uppercase' }}>Urgency</div>
-                  <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffbf72' }}>{activeThread.urgencyDays} Days</div>
+                <p style={{ fontSize: '12px', color: 'var(--ink)', margin: 0, lineHeight: 1.4 }}>
+                  {selectedThread.aiSetterIntelligence.summary}
+                </p>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '8px', fontSize: '11.5px' }}>
+                  <span>Budget: <strong style={{ color: '#059669' }}>{selectedThread.aiSetterIntelligence.statedBudget}</strong></span>
+                  <span>Role: <strong>{selectedThread.aiSetterIntelligence.decisionMakerRole}</strong></span>
                 </div>
               </div>
 
-              <div style={{ background: 'var(--dark-surface)', padding: '10px', borderRadius: '8px', border: '1px solid var(--dark-border)' }}>
-                <div style={{ fontSize: '10.5px', color: 'var(--dark-muted)' }}>Estimated Deal Value:</div>
-                <div style={{ fontSize: '18px', fontWeight: 800, color: '#fff', marginTop: '2px' }}>
-                  ₦{activeThread.dealValue.toLocaleString()}
+              {/* High-Converting Follow-up Script */}
+              <div style={{ background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: '8px', padding: '12px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>
+                  High-Converting Setter Follow-up Script:
                 </div>
-              </div>
 
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
-                <button
-                  className="btn-accent"
-                  style={{ width: '100%', justifyContent: 'center', fontSize: '12px' }}
-                  onClick={() => alert(`Appointment booking link sent to ${activeThread.leadName}!`)}
-                >
-                  <Zap size={14} /> Instant Closer Handoff
-                </button>
-                <button
-                  className="btn-secondary"
-                  style={{ width: '100%', justifyContent: 'center', fontSize: '12px', background: 'var(--dark-surface)', color: 'var(--dark-text)', borderColor: 'var(--dark-border)' }}
-                  onClick={() => setIsOverrideModalOpen(true)}
-                >
-                  <Edit3 size={13} /> Override Qualification
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: TRANSPARENT AI TIMELINE (Section 15 of Operating Model) */}
-          {activeRightTab === 'timeline' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ fontSize: '10.5px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase' }}>
-                Transparent AI Execution Log
-              </div>
-              <p style={{ fontSize: '11px', color: 'var(--dark-muted)', margin: 0 }}>
-                Verifiable event trail showing each automated stage from ingress to handoff.
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
-                {activeThread.timeline.map((item, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: '8px 10px',
-                      background: 'var(--dark-surface)',
-                      borderRadius: '6px',
-                      border: '1px solid var(--dark-border)',
-                      fontSize: '11.5px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, color: '#fff' }}>{item.action}</span>
-                      <span style={{ fontSize: '10px', color: 'var(--accent)', fontFamily: 'monospace' }}>{item.time}</span>
-                    </div>
-                    <div style={{ fontSize: '11px', color: 'var(--dark-muted)', marginTop: '2px' }}>
-                      {item.details}
-                    </div>
-                    {item.badge && (
-                      <span style={{ display: 'inline-block', fontSize: '9.5px', background: 'rgba(199, 255, 85, 0.15)', color: 'var(--accent)', padding: '1px 5px', borderRadius: '4px', marginTop: '4px', fontWeight: 700 }}>
-                        {item.badge}
-                      </span>
-                    )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' }}>
+                  <div>
+                    <span style={{ fontWeight: 700, color: '#ff5722' }}>1. Opening Hook:</span>
+                    <p style={{ margin: '2px 0 0 0', fontStyle: 'italic', color: 'var(--ink)' }}>
+                      {selectedThread.aiSetterIntelligence.suggestedScript.openingHook}
+                    </p>
                   </div>
-                ))}
+
+                  <div>
+                    <span style={{ fontWeight: 700, color: '#10b981' }}>2. Value Bridge:</span>
+                    <p style={{ margin: '2px 0 0 0', fontStyle: 'italic', color: 'var(--ink)' }}>
+                      {selectedThread.aiSetterIntelligence.suggestedScript.valueBridge}
+                    </p>
+                  </div>
+
+                  <div>
+                    <span style={{ fontWeight: 700, color: '#f59e0b' }}>3. Objection Handler:</span>
+                    <p style={{ margin: '2px 0 0 0', fontStyle: 'italic', color: 'var(--ink)' }}>
+                      {selectedThread.aiSetterIntelligence.suggestedScript.objectionHandler}
+                    </p>
+                  </div>
+
+                  <div>
+                    <span style={{ fontWeight: 700, color: '#3b82f6' }}>4. Closing CTA:</span>
+                    <p style={{ margin: '2px 0 0 0', fontStyle: 'italic', color: 'var(--ink)' }}>
+                      {selectedThread.aiSetterIntelligence.suggestedScript.closingCTA}
+                    </p>
+                  </div>
+                </div>
               </div>
+
+              {/* Next Step Action Button */}
+              <button
+                onClick={() => {
+                  alert(`📅 Calendar Demo booked on Client Google Meet calendar for ${selectedThread.leadName}! Notification sent.`);
+                }}
+                className="btn-accent"
+                style={{
+                  background: '#ff5722',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '10px',
+                  fontSize: '12px',
+                  fontWeight: 800,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Calendar size={14} />
+                <span>Confirm Closer Google Meet Booking</span>
+              </button>
             </div>
           )}
 
-          {/* TAB 3: AUDIT TRAIL (Section 13 of Operating Model) */}
-          {activeRightTab === 'audit' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ fontSize: '10.5px', fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase' }}>
-                Governance & Override Audit Log
-              </div>
-
-              {activeThread.auditTrail.length === 0 ? (
-                <div style={{ padding: '16px', textAlign: 'center', color: 'var(--dark-muted)', fontSize: '11.5px' }}>
-                  No manual overrides or takeovers logged yet.
+          {/* Tab 2: Vapi Outbound Telephony Hub */}
+          {activeRightTab === 'voice_hub' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
+              <div style={{ background: 'var(--bg)', padding: '14px', borderRadius: '8px', border: '1px solid var(--line)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 800 }}>Vapi Outbound AI Caller</span>
+                  <span style={{ fontSize: '10.5px', background: '#10b981', color: '#fff', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                    {isVoiceCallActive ? 'CALL IN PROGRESS' : 'CONNECTED'}
+                  </span>
                 </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {activeThread.auditTrail.map((audit, idx) => (
-                    <div
-                      key={idx}
+
+                <div style={{ fontSize: '11.5px', color: 'var(--muted)', marginBottom: '12px' }}>
+                  Voice: <strong>ElevenLabs - Marcus (Deep Executive)</strong> • Latency: <strong>480ms</strong>
+                </div>
+
+                {isVoiceCallActive ? (
+                  <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '4px', height: '40px', marginBottom: '10px' }}>
+                      <div className="voice-bar animate-pulse" style={{ width: '4px', height: '24px', background: '#ff5722', borderRadius: '2px' }} />
+                      <div className="voice-bar animate-pulse" style={{ width: '4px', height: '36px', background: '#10b981', borderRadius: '2px' }} />
+                      <div className="voice-bar animate-pulse" style={{ width: '4px', height: '18px', background: '#ff5722', borderRadius: '2px' }} />
+                      <div className="voice-bar animate-pulse" style={{ width: '4px', height: '30px', background: '#10b981', borderRadius: '2px' }} />
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 900, color: '#ff5722' }}>
+                      Call Active: {Math.floor(voiceCallDuration / 60)}:{(voiceCallDuration % 60).toString().padStart(2, '0')}
+                    </div>
+                    <button
+                      onClick={handleEndVapiVoiceCall}
                       style={{
-                        padding: '8px 10px',
-                        background: 'var(--dark-surface)',
+                        marginTop: '12px',
+                        background: '#ef4444',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '6px 16px',
                         borderRadius: '6px',
-                        border: '1px solid var(--dark-border)',
-                        fontSize: '11.5px',
+                        fontSize: '12px',
+                        fontWeight: 800,
+                        cursor: 'pointer',
                       }}
                     >
-                      <div style={{ fontWeight: 700, color: 'var(--accent)' }}>{audit.action}</div>
-                      <div style={{ fontSize: '11px', color: '#fff', marginTop: '2px' }}>
-                        By: <strong>{audit.actor}</strong> • {audit.date}
-                      </div>
-                      <div style={{ fontSize: '10.5px', color: 'var(--dark-muted)', marginTop: '2px' }}>
-                        Reason: {audit.reason}
-                      </div>
-                    </div>
-                  ))}
+                      End Call & Save Transcript
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleTriggerVapiVoiceCall}
+                    className="btn-accent"
+                    style={{ width: '100%', background: '#ff5722', color: '#fff', border: 'none', padding: '10px', fontSize: '12.5px', fontWeight: 800 }}
+                  >
+                    <PhoneCall size={14} /> Initiate 30s Speed-to-Lead Call
+                  </button>
+                )}
+              </div>
+
+              {/* Sample Real-time Transcript Snippet */}
+              <div style={{ background: 'var(--bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--line)', flex: 1, overflowY: 'auto' }}>
+                <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>
+                  Live Voice Call Transcript Stream:
                 </div>
-              )}
+                <div style={{ fontSize: '11.5px', color: 'var(--ink)', lineHeight: 1.4 }}>
+                  <p style={{ margin: '0 0 6px 0' }}><strong>AI Voice:</strong> "Hello {selectedThread.leadName}, this is Sarah from Zeerocodes following up on your scaling request..."</p>
+                  <p style={{ margin: '0 0 6px 0' }}><strong>Lead:</strong> "Yes, we need this for 400 monthly leads. Can we schedule a walkthrough?"</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 3: Audit Timeline */}
+          {activeRightTab === 'timeline' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1, fontSize: '11.5px' }}>
+              {selectedThread.timeline.map((item, idx) => (
+                <div key={idx} style={{ background: 'var(--bg)', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--line)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, color: 'var(--ink)', marginBottom: '2px' }}>
+                    <span>{item.action}</span>
+                    <span style={{ color: 'var(--muted)' }}>{item.time}</span>
+                  </div>
+                  <div style={{ color: 'var(--muted)' }}>{item.details}</div>
+                </div>
+              ))}
             </div>
           )}
         </div>
       </div>
-
-      {/* Override Qualification Modal */}
-      {isOverrideModalOpen && (
-        <div className="auth-modal-backdrop" onClick={() => setIsOverrideModalOpen(false)}>
-          <div className="auth-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800 }}>Override Qualification Decision</h3>
-              <button onClick={() => setIsOverrideModalOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '14px' }}>
-              As a client manager or admin, you can override the AI score. This action creates a permanent audit log entry.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '18px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
-                  New Qualification Score (0-100)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={overrideScore}
-                  onChange={(e) => setOverrideScore(Number(e.target.value))}
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
-                  Mandatory Audit Reason
-                </label>
-                <textarea
-                  rows={3}
-                  value={overrideReason}
-                  onChange={(e) => setOverrideReason(e.target.value)}
-                  placeholder="e.g. Strategic account, VIP referral, custom pricing arrangement..."
-                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12.5px' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              <button className="btn-secondary" onClick={() => setIsOverrideModalOpen(false)}>
-                Cancel
-              </button>
-              <button className="btn-accent" onClick={handleConfirmOverride}>
-                Log Override & Update Score
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

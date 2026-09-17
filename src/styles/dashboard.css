@@ -45,23 +45,26 @@
 
 /* Top Navigation Bar */
 .top-nav {
-  height: 72px;
-  background: rgba(244, 246, 241, 0.94);
+  height: 68px;
+  background: rgba(244, 246, 241, 0.96);
   border-bottom: 1px solid rgba(17, 21, 18, 0.09);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 20px;
   position: sticky;
   top: 0;
   z-index: 40;
   backdrop-filter: blur(16px);
+  gap: 16px;
 }
 
 .top-nav-left {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 16px;
+  min-width: 0;
+  flex: 1;
 }
 
 .brand-badge {
@@ -72,6 +75,7 @@
   color: var(--ink);
   font-weight: 700;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .brand-icon {

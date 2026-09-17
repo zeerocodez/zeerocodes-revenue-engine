@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { CheckCircle2, ChevronRight, FileSpreadsheet, Globe2, Inbox, Mail, Phone, Plus, Send, Upload, Users, X } from 'lucide-react';
 import { apiFetch, readJsonOrThrow, sessionTenant } from '../../lib/api';
 
+import type { UserSession } from '../auth/AuthModal';
+
 const sourceTypes = [
   { name: 'Website forms', icon: Globe2, detail: 'Inbound enquiry forms and landing pages', status: 'Connected' },
   { name: 'WhatsApp', icon: Phone, detail: 'Inbound conversations and campaign replies', status: 'Ready' },
@@ -9,7 +11,7 @@ const sourceTypes = [
   { name: 'CSV & API import', icon: Inbox, detail: 'Batch lead capture and third-party webhook feeds', status: 'Available' },
 ];
 
-export default function LeadSourcesWorkspace() {
+export default function LeadSourcesWorkspace({ session }: { session?: UserSession }) {
   const [showForm, setShowForm] = useState(false);
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [source, setSource] = useState('website');

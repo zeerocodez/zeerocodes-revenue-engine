@@ -7,12 +7,14 @@ import {
   Calendar,
   CheckSquare,
   CircleDollarSign,
+  Eye,
   FileText,
   Flame,
   GitBranch,
   Globe,
   Inbox,
   LayoutDashboard,
+  Lock,
   Menu,
   MessageSquare,
   Radio,
@@ -20,6 +22,8 @@ import {
   Shield,
   ShieldCheck,
   Sparkles,
+  ToggleLeft,
+  ToggleRight,
   UserCheck,
   Users,
   X,
@@ -51,43 +55,30 @@ interface NavItem {
   label: string;
   icon: typeof LayoutDashboard;
   badge?: string;
+  clientVisible?: boolean;
 }
 
-const navItems: NavItem[] = [
-  { id: 'Ops Hub', hash: 'operational', label: 'Executive Ops', icon: LayoutDashboard, badge: 'Live' },
-  { id: 'Client Portal', hash: 'client-portal', label: 'Client Portal', icon: BarChart3 },
-  { id: 'Qualify Logic', hash: 'qualify-logic', label: '08 Qualify Logic', icon: Sparkles, badge: 'AI Brain' },
-  { id: 'Follow-ups', hash: 'follow-ups', label: '03 Follow-ups', icon: Repeat },
-  { id: 'Leads', hash: 'leads', label: '05 Lead Database', icon: Inbox },
-  { id: 'Revenue', hash: 'analytics', label: '04 Analytics', icon: CircleDollarSign },
-  { id: 'Billing', hash: 'billing', label: '06 Billing', icon: CircleDollarSign },
-  { id: 'Inbox', hash: 'inbox', label: 'Live Inbox', icon: MessageSquare, badge: 'AI' },
-  { id: 'Pipeline', hash: 'pipeline', label: 'Deals CRM', icon: Zap, badge: 'Sales' },
-  { id: 'Onboarding', hash: 'onboarding', label: 'Onboarding', icon: ShieldCheck, badge: 'Setup' },
-  { id: 'Integrations', hash: 'integrations', label: '07 Integrations', icon: Radio },
-  { id: 'Templates', hash: 'templates', label: 'Templates', icon: FileText },
-  { id: 'Settings', hash: 'settings', label: 'Settings', icon: Shield },
+const ALL_NAV_ITEMS: NavItem[] = [
+  // Client Visible Tabs
+  { id: 'Client Portal', hash: 'client-portal', label: 'Client Portal', icon: BarChart3, clientVisible: true },
+  { id: 'Pipeline', hash: 'pipeline', label: 'Booked Deals CRM', icon: Zap, badge: 'Live', clientVisible: true },
+  { id: 'Lead Sources', hash: 'lead-sources', label: '07 Lead Sources', icon: Radio, clientVisible: true },
+  { id: 'Billing', hash: 'billing', label: '06 Billing & ROI', icon: CircleDollarSign, clientVisible: true },
+
+  // Internal Zeerocodes Ops & Setter Tabs
+  { id: 'Ops Hub', hash: 'operational', label: 'Executive Ops', icon: LayoutDashboard, badge: 'Live', clientVisible: false },
+  { id: 'Qualify Logic', hash: 'qualify-logic', label: '08 Qualify Logic', icon: Sparkles, badge: 'AI Brain', clientVisible: false },
+  { id: 'Inbox', hash: 'inbox', label: 'Live Inbox & Stream', icon: MessageSquare, badge: '45s', clientVisible: false },
+  { id: 'Follow-ups', hash: 'follow-ups', label: '03 Follow-ups', icon: Repeat, clientVisible: false },
+  { id: 'Leads', hash: 'leads', label: '05 Lead Database', icon: Inbox, clientVisible: false },
+  { id: 'Revenue', hash: 'analytics', label: '04 Analytics', icon: CircleDollarSign, clientVisible: false },
+  { id: 'Onboarding', hash: 'onboarding', label: 'Onboarding', icon: ShieldCheck, badge: 'Setup', clientVisible: false },
+  { id: 'Integrations', hash: 'integrations', label: 'Integrations Hub', icon: Radio, clientVisible: false },
+  { id: 'Templates', hash: 'templates', label: 'Templates', icon: FileText, clientVisible: false },
+  { id: 'Settings', hash: 'settings', label: 'Settings', icon: Shield, clientVisible: false },
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    const hash = window.location.hash.replace('#', '').toLowerCase();
-    if (hash === 'operational' || hash === 'overview') return 'Ops Hub';
-    if (hash === 'client-portal' || hash === 'client') return 'Client Portal';
-    if (hash === 'qualify-logic' || hash === 'qualify' || hash === 'rules') return 'Qualify Logic';
-    if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') return 'Follow-ups';
-    if (hash === 'leads' || hash === 'database') return 'Leads';
-    if (hash === 'analytics' || hash === 'revenue' || hash === 'reporting') return 'Revenue';
-    if (hash === 'billing' || hash === 'subscription') return 'Billing';
-    if (hash === 'onboarding' || hash === 'setup') return 'Onboarding';
-    if (hash === 'inbox' || hash === 'messages') return 'Inbox';
-    if (hash === 'pipeline' || hash === 'deals') return 'Pipeline';
-    if (hash === 'integrations' || hash === 'simulator') return 'Integrations';
-    if (hash === 'templates') return 'Templates';
-    if (hash === 'settings') return 'Settings';
-    return 'Landing';
-  });
-
   const [session, setSession] = useState<UserSession>(() => {
     const saved = localStorage.getItem('zeero_user_session');
     if (saved) {
@@ -108,17 +99,53 @@ export default function App() {
     };
   });
 
+  // View Mode: 'client' (isolated for external clients) or 'ops' (Zeerocodes agency & setters)
+  const [viewMode, setViewMode] = useState<'client' | 'ops'>(() => {
+    return (session.role as string) === 'viewer' ? 'client' : 'ops';
+  });
+
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const hash = window.location.hash.replace('#', '').toLowerCase();
+    if (hash === 'client-portal' || hash === 'client') return 'Client Portal';
+    if (hash === 'operational' || hash === 'overview') return 'Ops Hub';
+    if (hash === 'qualify-logic' || hash === 'qualify' || hash === 'rules') return 'Qualify Logic';
+    if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') return 'Follow-ups';
+    if (hash === 'leads' || hash === 'database') return 'Leads';
+    if (hash === 'analytics' || hash === 'revenue' || hash === 'reporting') return 'Revenue';
+    if (hash === 'billing' || hash === 'subscription') return 'Billing';
+    if (hash === 'onboarding' || hash === 'setup') return 'Onboarding';
+    if (hash === 'inbox' || hash === 'messages') return 'Inbox';
+    if (hash === 'pipeline' || hash === 'deals') return 'Pipeline';
+    if (hash === 'lead-sources') return 'Lead Sources';
+    if (hash === 'integrations' || hash === 'simulator') return 'Integrations';
+    if (hash === 'templates') return 'Templates';
+    if (hash === 'settings') return 'Settings';
+    return 'Landing';
+  });
+
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleUpdateSession = (newSession: UserSession) => {
     setSession(newSession);
     localStorage.setItem('zeero_user_session', JSON.stringify(newSession));
+    if ((newSession.role as string) === 'viewer') {
+      setViewMode('client');
+      setActiveTab('Client Portal');
+      window.location.hash = 'client-portal';
+    }
   };
+
+  const visibleNavItems = ALL_NAV_ITEMS.filter((item) => {
+    if (viewMode === 'client') {
+      return item.clientVisible;
+    }
+    return true;
+  });
 
   const navigateTo = (tabName: string) => {
     setActiveTab(tabName);
-    const item = navItems.find((n) => n.id === tabName);
+    const item = ALL_NAV_ITEMS.find((n) => n.id === tabName);
     if (item) {
       window.location.hash = item.hash;
     } else if (tabName === 'Landing') {
@@ -132,15 +159,17 @@ export default function App() {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
       if (hash === 'landing' || hash === '') setActiveTab('Landing');
-      else if (hash === 'operational' || hash === 'overview') setActiveTab('Ops Hub');
       else if (hash === 'client-portal' || hash === 'client') setActiveTab('Client Portal');
+      else if (hash === 'operational' || hash === 'overview') setActiveTab('Ops Hub');
       else if (hash === 'qualify-logic' || hash === 'qualify' || hash === 'rules') setActiveTab('Qualify Logic');
       else if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') setActiveTab('Follow-ups');
       else if (hash === 'leads' || hash === 'database') setActiveTab('Leads');
       else if (hash === 'analytics' || hash === 'revenue' || hash === 'reporting') setActiveTab('Revenue');
+      else if (hash === 'billing' || hash === 'subscription') setActiveTab('Billing');
       else if (hash === 'onboarding' || hash === 'setup') setActiveTab('Onboarding');
       else if (hash === 'inbox' || hash === 'messages') setActiveTab('Inbox');
       else if (hash === 'pipeline' || hash === 'deals') setActiveTab('Pipeline');
+      else if (hash === 'lead-sources') setActiveTab('Lead Sources');
       else if (hash === 'integrations' || hash === 'simulator') setActiveTab('Integrations');
       else if (hash === 'templates') setActiveTab('Templates');
       else if (hash === 'settings') setActiveTab('Settings');
@@ -155,7 +184,7 @@ export default function App() {
       <div>
         <div style={{ background: 'var(--ink)', color: '#fff', padding: '8px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', borderBottom: '1px solid var(--dark-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="role-badge superadmin">Unified Revenue Engine</span>
+            <span className="role-badge superadmin">Zeerocodes Revenue Engine</span>
             <span>Organization: <strong>{session.tenantName}</strong> ({session.userName})</span>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
@@ -166,7 +195,7 @@ export default function App() {
               Switch Workspace
             </button>
             <button
-              onClick={() => navigateTo('Ops Hub')}
+              onClick={() => navigateTo('Client Portal')}
               className="btn-accent"
               style={{ padding: '4px 12px', fontSize: '12px' }}
             >
@@ -177,9 +206,9 @@ export default function App() {
 
         <LandingPage onLaunchWorkspace={(tab) => {
           if (tab === 'leads') navigateTo('Leads');
-          else if (tab === 'sdr') navigateTo('SDR Queue');
+          else if (tab === 'sdr') navigateTo('Inbox');
           else if (tab === 'revenue') navigateTo('Revenue');
-          else navigateTo('Ops Hub');
+          else navigateTo('Client Portal');
         }} />
 
         <AuthModal
@@ -205,8 +234,66 @@ export default function App() {
             </div>
           </div>
 
+          {/* Role / View Mode Switcher Pill */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(17, 21, 18, 0.08)',
+              padding: '3px',
+              borderRadius: '8px',
+              border: '1px solid var(--line)',
+              gap: '2px',
+              flexShrink: 0,
+            }}
+          >
+            <button
+              onClick={() => {
+                setViewMode('client');
+                if (!['Client Portal', 'Pipeline', 'Lead Sources', 'Billing'].includes(activeTab)) {
+                  navigateTo('Client Portal');
+                }
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 10px',
+                fontSize: '11px',
+                fontWeight: 700,
+                borderRadius: '6px',
+                border: 'none',
+                background: viewMode === 'client' ? '#10b981' : 'transparent',
+                color: viewMode === 'client' ? '#fff' : 'var(--muted)',
+                cursor: 'pointer',
+              }}
+            >
+              <Eye size={12} /> Client View
+            </button>
+
+            <button
+              onClick={() => setViewMode('ops')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 10px',
+                fontSize: '11px',
+                fontWeight: 700,
+                borderRadius: '6px',
+                border: 'none',
+                background: viewMode === 'ops' ? '#ff5722' : 'transparent',
+                color: viewMode === 'ops' ? '#fff' : 'var(--muted)',
+                cursor: 'pointer',
+              }}
+            >
+              <Zap size={12} /> Zeerocodes Ops
+            </button>
+          </div>
+
+          {/* Dynamic Navigation Tabs based on Mode */}
           <nav className="nav-tabs">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               const active = activeTab === item.id;
               return (
@@ -253,8 +340,8 @@ export default function App() {
 
       {/* Main View Router */}
       <main style={{ flex: 1 }}>
-        {activeTab === 'Ops Hub' && <OperationalDashboard session={session} onNavigate={navigateTo} />}
         {activeTab === 'Client Portal' && <ClientDashboard session={session} onNavigate={navigateTo} />}
+        {activeTab === 'Ops Hub' && <OperationalDashboard session={session} onNavigate={navigateTo} />}
         {activeTab === 'Qualify Logic' && <QualifyLogicWorkspace session={session} onNavigate={navigateTo} />}
         {activeTab === 'Follow-ups' && <FollowUpCadenceWorkspace session={session} />}
         {activeTab === 'Leads' && <LeadWorkspace session={session} />}
@@ -263,6 +350,7 @@ export default function App() {
         {activeTab === 'Onboarding' && <OnboardingWizard session={session} onNavigate={navigateTo} />}
         {activeTab === 'Inbox' && <UnifiedInboxWorkspace session={session} />}
         {activeTab === 'Pipeline' && <SalesPipelineWorkspace session={session} />}
+        {activeTab === 'Lead Sources' && <LeadSourcesWorkspace session={session} />}
         {activeTab === 'Integrations' && <IntegrationsHubWorkspace session={session} />}
         {activeTab === 'Templates' && <TemplatesWorkspace session={session} />}
         {activeTab === 'Settings' && <SettingsWorkspace />}
