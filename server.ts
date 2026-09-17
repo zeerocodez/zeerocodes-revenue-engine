@@ -53,6 +53,7 @@ import { VoiceAgentService } from './src/application/voice-agent-service';
 import { SUBSCRIPTION_PLANS, TenantUsageSummary } from './src/domain/subscription-billing';
 import { evaluateLeadQualificationWithOpenAI, generateSetterHandoffScriptWithOpenAI } from './src/integrations/openai-client';
 import { sendWhatsAppMessage } from './src/integrations/whatsapp-client';
+import { dispatchOutboundVapiCall, listVapiAssistants } from './src/integrations/vapi-client';
 
 const app = express(), port = Number(process.env.PORT || 3000), usePostgres = Boolean(process.env.DATABASE_URL);
 
@@ -230,6 +231,33 @@ app.post('/api/whatsapp/send', async (req, res) => {
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: e instanceof Error ? e.message : 'WhatsApp dispatch failed' });
+  }
+});
+
+// Live Outbound AI Voice Telephony Dispatch Endpoint (Powered by Vapi.ai)
+app.post('/api/vapi/call', async (req, res) => {
+  try {
+    const { customerPhoneNumber, leadName, assistantId, customPromptVariables } = req.body;
+    if (!customerPhoneNumber) return res.status(400).json({ error: 'Missing customerPhoneNumber' });
+    const result = await dispatchOutboundVapiCall({
+      customerPhoneNumber,
+      leadName,
+      assistantId,
+      customPromptVariables,
+    });
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Vapi call dispatch failed' });
+  }
+});
+
+// List Vapi Assistants
+app.get('/api/vapi/assistants', async (_req, res) => {
+  try {
+    const assistants = await listVapiAssistants();
+    return res.json({ assistants });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to fetch Vapi assistants' });
   }
 });
 
