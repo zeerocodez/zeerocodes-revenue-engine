@@ -52,6 +52,7 @@ import { MetaConversionsAdapter } from './src/integrations/meta-conversions-adap
 import { VoiceAgentService } from './src/application/voice-agent-service';
 import { SUBSCRIPTION_PLANS, TenantUsageSummary } from './src/domain/subscription-billing';
 import { evaluateLeadQualificationWithOpenAI, generateSetterHandoffScriptWithOpenAI } from './src/integrations/openai-client';
+import { sendWhatsAppMessage } from './src/integrations/whatsapp-client';
 
 const app = express(), port = Number(process.env.PORT || 3000), usePostgres = Boolean(process.env.DATABASE_URL);
 
@@ -217,6 +218,18 @@ app.post('/api/ai/generate-script', async (req, res) => {
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: e instanceof Error ? e.message : 'AI Script generation failed' });
+  }
+});
+
+// Live WhatsApp Message Dispatch Endpoint (Powered by Meta Cloud API)
+app.post('/api/whatsapp/send', async (req, res) => {
+  try {
+    const { to, text } = req.body;
+    if (!to || !text) return res.status(400).json({ error: 'Missing required parameters: to, text' });
+    const result = await sendWhatsAppMessage({ to, text });
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'WhatsApp dispatch failed' });
   }
 });
 
