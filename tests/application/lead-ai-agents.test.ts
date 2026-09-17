@@ -10,16 +10,29 @@ import type { LeadRecord } from '../../src/domain/lead';
 const configuration: ClientConfiguration = {
   organizationId: 'org-1',
   version: 1,
+  active: true,
+  acceptedServiceTypes: [],
+  locations: [],
+  updatedAt: new Date().toISOString(),
   qualification: {
-    threshold: 70,
-    weights: { serviceFit: 25, needConfirmed: 20, decisionMaker: 20, locationFit: 15, urgency: 10, budget: 10 },
+    qualificationThreshold: 70,
     maximumUrgencyDays: 14,
     requireDecisionMaker: false,
-    requireBudget: false,
+    requireServiceFit: true,
+    requireLocationFit: false,
   },
   scoring: {
     threshold: 70,
+    hotScore: 80,
+    warmScore: 50,
     weights: { serviceFit: 25, needConfirmed: 20, decisionMaker: 20, locationFit: 15, urgency: 10, budget: 10 },
+  },
+  conversation: {
+    allowedChannels: ['whatsapp', 'sms', 'email', 'voice', 'web'],
+    handoffOnHumanRequest: 'sdr',
+    handoffOnComplaint: 'sdr',
+    handoffOnBooking: 'closer',
+    maxAiMessagesBeforeHumanHandoff: 8,
   },
 };
 
