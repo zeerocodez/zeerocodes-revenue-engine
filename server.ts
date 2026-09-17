@@ -43,6 +43,9 @@ import { createAuditRequest, type AuditRequestInput } from './src/domain/audit-r
 import { parseLeadCsv, rowToLeadInput } from './src/domain/lead-source';
 import { MemoryAuditRequestStore, type AuditRequestStore } from './src/integrations/memory-audit-requests';
 import { PostgresAuditRequestStore } from './src/integrations/postgres-audit-requests';
+import { MemorySalesRepository, type SalesRepository } from './src/integrations/memory-sales';
+import type { DealStage } from './src/domain/deal';
+import type { ActivityType } from './src/domain/activity';
 
 const app = express(), port = Number(process.env.PORT || 3000), usePostgres = Boolean(process.env.DATABASE_URL);
 
@@ -68,6 +71,7 @@ const sdrQueueService = new SdrQueueService(workflow);
 const sdrDispositionService = new SdrDispositionService(lifecycleService);
 const revenueRecoveryService = new RevenueRecoveryService(workflow, leadStore, lifecycleService, leadEventStore, db);
 const revenueLeakageService = new RevenueLeakageService(leadStore, workflow);
+const salesRepository: SalesRepository = new MemorySalesRepository();
 
 const conversationStore = db ? new PostgresConversationStore(db) : new MemoryConversationStore();
 const messageStore = db ? new PostgresMessageStore(db) : new MemoryMessageStore();
@@ -128,6 +132,117 @@ app.get('/api/public/audit-requests', async (_req, res) => {
     return res.json({ auditRequests: requests });
   } catch (e) {
     return res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to fetch audit requests' });
+  }
+});
+
+// Public Lead Ingestion Webhook (Meta Ads, Zapier, Web Forms)
+app.post('/api/public/lead-intake', async (req, res) => {
+  try {
+    const tenantId = String(req.query.tenant || req.body?.organizationId || process.env.DEV_TENANT_ID || 'demo-tenant').trim();
+    if (!tenantId) return res.status(400).json({ error: 'Target tenant ID is required' });
+
+    const name = String(req.body?.name || req.body?.fullName || req.body?.leadName || 'Inbound Lead').trim();
+    const email = req.body?.email ? String(req.body.email).trim() : undefined;
+    const phone = req.body?.phone ? String(req.body.phone).trim() : undefined;
+    const source = String(req.body?.source || req.body?.channel || 'webhook-intake').trim();
+    const commercial = req.body?.commercial ?? (typeof req.body?.estimatedDealValue === 'number' ? { estimatedDealValue: req.body.estimatedDealValue, currency: req.body?.currency || 'NGN' } : undefined);
+    const profile = req.body?.profile ?? {
+      budget: Number(req.body?.budget || 0),
+      urgencyDays: Number(req.body?.urgencyDays ?? 7),
+      decisionMaker: Boolean(req.body?.decisionMaker ?? true),
+      serviceFit: true,
+    };
+
+    const result = await revenueEngine.intake({
+      organizationId: tenantId,
+      name,
+      email,
+      phone,
+      source,
+      profile,
+      commercial,
+      consent: req.body?.consent !== false,
+      metadata: { ...req.body?.metadata, rawPayload: req.body },
+    });
+
+    if (followUpRepository) await planInitialFollowUps(followUpRepository, result.lead, result.decision);
+    if (webhookDispatcher) {
+      await webhookDispatcher.enqueue({
+        id: randomUUID(),
+        organizationId: tenantId,
+        type: 'lead.created',
+        occurredAt: new Date().toISOString(),
+        payload: { lead: result.lead, decision: result.decision },
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      leadId: result.lead.id,
+      lead: result.lead,
+      decision: result.decision,
+      score: result.lead.score,
+      route: result.decision.route,
+      action: result.decision.action,
+    });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : 'Invalid public lead intake submission' });
+  }
+});
+
+// Meta Ads & WhatsApp Webhook Verification
+app.get('/api/webhooks/meta', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  const expectedToken = process.env.META_VERIFY_TOKEN || 'zeerocodes_meta_secret_token';
+  if (mode === 'subscribe' && token === expectedToken) {
+    return res.status(200).send(challenge);
+  }
+  return res.sendStatus(403);
+});
+
+// Meta Ads & WhatsApp Webhook Receiver
+app.post('/api/webhooks/meta', async (req, res) => {
+  try {
+    const tenantId = String(req.query.tenant || process.env.DEV_TENANT_ID || 'demo-tenant');
+    const body = req.body;
+    // Immediate 200 OK to acknowledge Meta
+    res.status(200).json({ status: 'received' });
+
+    // Background processing of lead or message
+    if (body?.entry) {
+      for (const entry of body.entry) {
+        if (entry.changes) {
+          for (const change of entry.changes) {
+            if (change.value?.messages) {
+              for (const msg of change.value.messages) {
+                const phone = msg.from;
+                const text = msg.text?.body || '';
+                // Process conversation if text exists
+                if (text && phone) {
+                  const leads = await leadStore.list(tenantId);
+                  const matchedLead = leads.find((l) => l.phone === phone || l.phone?.replace(/\D/g, '') === phone.replace(/\D/g, ''));
+                  if (matchedLead) {
+                    const configuration = await clientConfigurationService.get(tenantId);
+                    await qualificationOrchestrator.process({
+                      leadId: matchedLead.id,
+                      organizationId: tenantId,
+                      text,
+                      configuration,
+                      policy: configuration.qualification,
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Meta webhook processing error:', e);
   }
 });
 
@@ -579,6 +694,148 @@ app.post('/api/leads/import-csv', async (req: RequestWithContext, res) => {
     });
   } catch (e) {
     return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Failed to import CSV' });
+  }
+});
+
+// Sales CRM Deals Endpoints
+app.get('/api/deals', async (req: RequestWithContext, res) => {
+  try {
+    const c = contextOf(req);
+    requireRole(c, 'viewer');
+    const deals = await salesRepository.listDeals(c.tenantId);
+    return res.json({ deals });
+  } catch (e) {
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Unable to list deals' });
+  }
+});
+
+app.post('/api/deals', async (req: RequestWithContext, res) => {
+  try {
+    const c = contextOf(req);
+    requireRole(c, 'agent');
+    const body = req.body || {};
+    const deal = {
+      id: `deal_${Date.now()}`,
+      organizationId: c.tenantId,
+      title: String(body.title || 'New Deal').trim(),
+      leadId: body.leadId,
+      contactName: String(body.contactName || 'Lead Contact').trim(),
+      companyName: String(body.companyName || 'Lead Company').trim(),
+      value: Number(body.value || 0),
+      currency: String(body.currency || 'NGN'),
+      stage: (body.stage || 'discovery') as DealStage,
+      probability: Number(body.probability || 20),
+      ownerId: c.userId,
+      ownerName: String(body.ownerName || 'Assigned Rep'),
+      expectedCloseDate: String(body.expectedCloseDate || new Date().toISOString().split('T')[0]),
+      priority: body.priority || 'medium',
+      tags: Array.isArray(body.tags) ? body.tags : ['Sales-CRM'],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await salesRepository.saveDeal(deal);
+    return res.status(201).json({ deal });
+  } catch (e) {
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Unable to create deal' });
+  }
+});
+
+app.put('/api/deals/:id/stage', async (req: RequestWithContext, res) => {
+  try {
+    const c = contextOf(req);
+    requireRole(c, 'agent');
+    const deal = await salesRepository.getDeal(c.tenantId, req.params.id);
+    if (!deal) return res.status(404).json({ error: 'Deal not found' });
+    const stage = req.body?.stage as DealStage;
+    if (!stage) return res.status(400).json({ error: 'Valid deal stage is required' });
+    deal.stage = stage;
+    if (typeof req.body?.probability === 'number') deal.probability = req.body.probability;
+    deal.updatedAt = new Date().toISOString();
+    await salesRepository.saveDeal(deal);
+    return res.json({ deal });
+  } catch (e) {
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Unable to update deal stage' });
+  }
+});
+
+app.delete('/api/deals/:id', async (req: RequestWithContext, res) => {
+  try {
+    const c = contextOf(req);
+    requireRole(c, 'admin');
+    const success = await salesRepository.deleteDeal(c.tenantId, req.params.id);
+    return res.json({ success });
+  } catch (e) {
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Unable to delete deal' });
+  }
+});
+
+// Sales CRM Activities Endpoints
+app.get('/api/activities', async (req: RequestWithContext, res) => {
+  try {
+    const c = contextOf(req);
+    requireRole(c, 'viewer');
+    const activities = await salesRepository.listActivities(c.tenantId);
+    return res.json({ activities });
+  } catch (e) {
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Unable to list activities' });
+  }
+});
+
+app.post('/api/activities', async (req: RequestWithContext, res) => {
+  try {
+    const c = contextOf(req);
+    requireRole(c, 'agent');
+    const body = req.body || {};
+    const activity = {
+      id: `act_${Date.now()}`,
+      organizationId: c.tenantId,
+      dealId: body.dealId,
+      leadId: body.leadId,
+      type: (body.type || 'call') as ActivityType,
+      title: String(body.title || 'Task').trim(),
+      description: body.description,
+      status: (body.status || 'pending') as 'pending' | 'completed',
+      dueAt: String(body.dueAt || 'Today'),
+      completedAt: body.status === 'completed' ? new Date().toISOString() : undefined,
+      assignedTo: c.userId,
+      assignedToName: String(body.assignedToName || 'Rep'),
+      outcome: body.outcome,
+      createdAt: new Date().toISOString(),
+    };
+    await salesRepository.saveActivity(activity);
+    return res.status(201).json({ activity });
+  } catch (e) {
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Unable to create activity' });
+  }
+});
+
+app.put('/api/activities/:id', async (req: RequestWithContext, res) => {
+  try {
+    const c = contextOf(req);
+    requireRole(c, 'agent');
+    const activity = await salesRepository.getActivity(c.tenantId, req.params.id);
+    if (!activity) return res.status(404).json({ error: 'Activity not found' });
+    if (req.body?.status) {
+      activity.status = req.body.status;
+      activity.completedAt = req.body.status === 'completed' ? new Date().toISOString() : undefined;
+    }
+    if (req.body?.outcome) activity.outcome = req.body.outcome;
+    if (req.body?.description) activity.description = req.body.description;
+    await salesRepository.saveActivity(activity);
+    return res.json({ activity });
+  } catch (e) {
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Unable to update activity' });
+  }
+});
+
+app.delete('/api/activities/:id', async (req: RequestWithContext, res) => {
+  try {
+    const c = contextOf(req);
+    requireRole(c, 'agent');
+    const success = await salesRepository.deleteActivity(c.tenantId, req.params.id);
+    return res.json({ success });
+  } catch (e) {
+    return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : 'Unable to delete activity' });
   }
 });
 
