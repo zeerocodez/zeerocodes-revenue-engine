@@ -47,6 +47,11 @@ import { MemorySalesRepository, type SalesRepository } from './src/integrations/
 import type { DealStage } from './src/domain/deal';
 import type { ActivityType } from './src/domain/activity';
 
+import { CalendarBookingService } from './src/application/calendar-booking-service';
+import { MetaConversionsAdapter } from './src/integrations/meta-conversions-adapter';
+import { VoiceAgentService } from './src/application/voice-agent-service';
+import { SUBSCRIPTION_PLANS, TenantUsageSummary } from './src/domain/subscription-billing';
+
 const app = express(), port = Number(process.env.PORT || 3000), usePostgres = Boolean(process.env.DATABASE_URL);
 
 const db = usePostgres ? new PostgresDatabase() : undefined;
@@ -72,6 +77,10 @@ const sdrDispositionService = new SdrDispositionService(lifecycleService);
 const revenueRecoveryService = new RevenueRecoveryService(workflow, leadStore, lifecycleService, leadEventStore, db);
 const revenueLeakageService = new RevenueLeakageService(leadStore, workflow);
 const salesRepository: SalesRepository = new MemorySalesRepository();
+
+const calendarBookingService = new CalendarBookingService();
+const metaConversionsAdapter = new MetaConversionsAdapter();
+const voiceAgentService = new VoiceAgentService();
 
 const conversationStore = db ? new PostgresConversationStore(db) : new MemoryConversationStore();
 const messageStore = db ? new PostgresMessageStore(db) : new MemoryMessageStore();
@@ -243,6 +252,116 @@ app.post('/api/webhooks/meta', async (req, res) => {
     }
   } catch (e) {
     console.error('Meta webhook processing error:', e);
+  }
+});
+
+// Calendar Bookings & Availability API
+app.post('/api/calendar/bookings', async (req, res) => {
+  try {
+    const booking = await calendarBookingService.createBooking({
+      organizationId: String(req.body?.organizationId || req.query?.tenant || 'demo-tenant'),
+      leadId: String(req.body?.leadId || `lead_${Date.now()}`),
+      leadName: String(req.body?.leadName || 'Prospective Client'),
+      leadPhone: String(req.body?.leadPhone || '+234 800 000 0000'),
+      leadEmail: String(req.body?.leadEmail || 'client@example.com'),
+      title: req.body?.title,
+      description: req.body?.description,
+      preferredPlatform: req.body?.preferredPlatform,
+      dealValue: req.body?.dealValue,
+      customStartTime: req.body?.customStartTime,
+    });
+    return res.status(201).json({ success: true, booking });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : 'Booking creation failed' });
+  }
+});
+
+app.get('/api/calendar/bookings', async (req, res) => {
+  try {
+    const tenantId = String(req.query?.tenant || 'demo-tenant');
+    const bookings = await calendarBookingService.getBookings(tenantId);
+    return res.json({ bookings });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to fetch bookings' });
+  }
+});
+
+// Meta Conversions API (CAPI) & Offline Attribution
+app.post('/api/conversions/emit', async (req, res) => {
+  try {
+    const event = await metaConversionsAdapter.emitConversion({
+      organizationId: String(req.body?.organizationId || req.query?.tenant || 'demo-tenant'),
+      leadId: String(req.body?.leadId || `lead_${Date.now()}`),
+      eventName: req.body?.eventName || 'Purchase',
+      dealValue: req.body?.dealValue,
+      currency: req.body?.currency || 'NGN',
+      leadScore: req.body?.leadScore,
+      serviceType: req.body?.serviceType,
+      userData: req.body?.userData,
+    });
+    return res.status(201).json({ success: true, event });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : 'Conversion dispatch failed' });
+  }
+});
+
+app.get('/api/conversions/events', async (req, res) => {
+  try {
+    const tenantId = String(req.query?.tenant || 'demo-tenant');
+    const events = metaConversionsAdapter.getDispatchedEvents(tenantId);
+    return res.json({ events });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to fetch conversion events' });
+  }
+});
+
+// AI Voice Agent Calling API
+app.post('/api/voice/calls', async (req, res) => {
+  try {
+    const call = await voiceAgentService.dispatchOutboundCall({
+      organizationId: String(req.body?.organizationId || req.query?.tenant || 'demo-tenant'),
+      leadId: String(req.body?.leadId || `lead_${Date.now()}`),
+      leadName: String(req.body?.leadName || 'Inbound Prospect'),
+      phoneNumber: String(req.body?.phoneNumber || '+234 800 000 0000'),
+      leadScore: Number(req.body?.leadScore || 90),
+      dealValue: req.body?.dealValue ? Number(req.body.dealValue) : undefined,
+    });
+    return res.status(201).json({ success: true, call });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : 'Voice dispatch failed' });
+  }
+});
+
+app.get('/api/voice/calls', async (req, res) => {
+  try {
+    const tenantId = String(req.query?.tenant || 'demo-tenant');
+    const calls = await voiceAgentService.getCalls(tenantId);
+    return res.json({ calls });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to fetch voice calls' });
+  }
+});
+
+// Subscription Billing & Usage Telemetry
+app.get('/api/billing/usage', async (req, res) => {
+  try {
+    const tenantId = String(req.query?.tenant || 'demo-tenant');
+    const usage: TenantUsageSummary = {
+      organizationId: tenantId,
+      currentPlan: 'growth',
+      billingCycleStart: '01 Sept 2026',
+      billingCycleEnd: '01 Oct 2026',
+      leadsIngestedCount: 247,
+      leadsIngestedLimit: 1500,
+      voiceMinutesUsed: 42,
+      voiceMinutesLimit: 200,
+      whatsappMessagesSent: 892,
+      closedWonAttributedRevenue: 18400000,
+      commissionPayableNgn: 460000,
+    };
+    return res.json({ usage, plans: SUBSCRIPTION_PLANS });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to fetch billing usage' });
   }
 });
 

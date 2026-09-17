@@ -1,7 +1,7 @@
 // server.ts
 import express from "express";
 import path2 from "node:path";
-import { randomUUID as randomUUID5 } from "node:crypto";
+import { randomUUID as randomUUID9 } from "node:crypto";
 
 // src/application/conversation-service.ts
 function id(prefix) {
@@ -3239,6 +3239,350 @@ var MemorySalesRepository = class {
   }
 };
 
+// src/application/calendar-booking-service.ts
+import { randomUUID as randomUUID6 } from "node:crypto";
+
+// src/domain/calendar-sync.ts
+import { randomUUID as randomUUID5 } from "node:crypto";
+function generateMeetingLink(platform, bookingId) {
+  switch (platform) {
+    case "google_meet":
+      return `https://meet.google.com/zee-${bookingId.slice(0, 4)}-${bookingId.slice(4, 7)}`;
+    case "zoom":
+      return `https://zoom.us/j/849${bookingId.replace(/\D/g, "").padEnd(8, "0").slice(0, 8)}`;
+    case "microsoft_teams":
+      return `https://teams.microsoft.com/l/meetup-join/zeero_${bookingId}`;
+    case "phone_call":
+      return "Direct Phone Conference";
+    case "in_person":
+      return "Client Office / Physical Location";
+  }
+}
+function createDefaultReminders(startTimeIso, leadName, meetingLink) {
+  const start2 = new Date(startTimeIso).getTime();
+  return [
+    // 24 Hours Before
+    {
+      id: `rem_24h_${randomUUID5().slice(0, 8)}`,
+      offsetMinutesBefore: 1440,
+      channel: "whatsapp",
+      template: `Hi ${leadName}! This is a reminder for our executive demonstration tomorrow. Meeting link: ${meetingLink || "Sent to email"}.`,
+      status: "scheduled",
+      scheduledAt: new Date(start2 - 24 * 60 * 60 * 1e3).toISOString()
+    },
+    // 2 Hours Before
+    {
+      id: `rem_2h_${randomUUID5().slice(0, 8)}`,
+      offsetMinutesBefore: 120,
+      channel: "sms",
+      template: `Hi ${leadName}, our sales closer is ready for your demo in 2 hours. Link: ${meetingLink || "Check email"}.`,
+      status: "scheduled",
+      scheduledAt: new Date(start2 - 2 * 60 * 60 * 1e3).toISOString()
+    },
+    // 10 Minutes Before
+    {
+      id: `rem_10m_${randomUUID5().slice(0, 8)}`,
+      offsetMinutesBefore: 10,
+      channel: "whatsapp",
+      template: `We are starting in 10 minutes! Join the room here: ${meetingLink || "Check calendar invite"}. Looking forward to speaking!`,
+      status: "scheduled",
+      scheduledAt: new Date(start2 - 10 * 60 * 1e3).toISOString()
+    }
+  ];
+}
+function findNextAvailableSlot(availability, requestedDurationMinutes = 30, referenceDate = /* @__PURE__ */ new Date()) {
+  const tomorrow = new Date(referenceDate);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(14, 0, 0, 0);
+  for (const closer of availability) {
+    const isSlotConflict = closer.existingBookings.some((b) => {
+      const bStart = new Date(b.startTime).getTime();
+      const bEnd = new Date(b.endTime).getTime();
+      const sStart = tomorrow.getTime();
+      const sEnd = sStart + requestedDurationMinutes * 60 * 1e3;
+      return sStart >= bStart && sStart < bEnd || sEnd > bStart && sEnd <= bEnd;
+    });
+    if (!isSlotConflict) {
+      const slotEnd = new Date(tomorrow.getTime() + requestedDurationMinutes * 60 * 1e3);
+      return {
+        startTime: tomorrow.toISOString(),
+        endTime: slotEnd.toISOString(),
+        closerId: closer.closerId,
+        closerName: closer.closerName,
+        closerEmail: closer.closerEmail,
+        platform: "google_meet"
+      };
+    }
+  }
+  return null;
+}
+
+// src/application/calendar-booking-service.ts
+var CalendarBookingService = class {
+  bookings = /* @__PURE__ */ new Map();
+  closersAvailability = [
+    {
+      closerId: "closer_folake",
+      closerName: "Folake Adeleke",
+      closerEmail: "folake@zeerocodes.com",
+      timeZone: "Africa/Lagos",
+      workingHours: { startHour: 9, endHour: 18, daysOfWeek: [1, 2, 3, 4, 5] },
+      existingBookings: []
+    },
+    {
+      closerId: "closer_emeka",
+      closerName: "Emeka Nwosu",
+      closerEmail: "emeka@zeerocodes.com",
+      timeZone: "Africa/Lagos",
+      workingHours: { startHour: 9, endHour: 18, daysOfWeek: [1, 2, 3, 4, 5] },
+      existingBookings: []
+    }
+  ];
+  async createBooking(input) {
+    const bookingId = `book_${randomUUID6().slice(0, 8)}`;
+    const platform = input.preferredPlatform || "google_meet";
+    let startTime = input.customStartTime;
+    let endTime;
+    let closerId = input.closerId || this.closersAvailability[0].closerId;
+    let closerName = input.closerName || this.closersAvailability[0].closerName;
+    let closerEmail = input.closerEmail || this.closersAvailability[0].closerEmail;
+    if (!startTime) {
+      const slot = findNextAvailableSlot(this.closersAvailability, 30);
+      if (slot) {
+        startTime = slot.startTime;
+        endTime = slot.endTime;
+        closerId = slot.closerId;
+        closerName = slot.closerName;
+        closerEmail = slot.closerEmail;
+      } else {
+        const d = /* @__PURE__ */ new Date();
+        d.setDate(d.getDate() + 1);
+        d.setHours(14, 0, 0, 0);
+        startTime = d.toISOString();
+        endTime = new Date(d.getTime() + 30 * 60 * 1e3).toISOString();
+      }
+    } else {
+      const d = new Date(startTime);
+      endTime = new Date(d.getTime() + 30 * 60 * 1e3).toISOString();
+    }
+    const meetingLink = generateMeetingLink(platform, bookingId);
+    const reminders = createDefaultReminders(startTime, input.leadName, meetingLink);
+    const booking = {
+      id: bookingId,
+      organizationId: input.organizationId,
+      leadId: input.leadId,
+      leadName: input.leadName,
+      leadPhone: input.leadPhone,
+      leadEmail: input.leadEmail,
+      closerId,
+      closerName,
+      closerEmail,
+      title: input.title || `Executive Product Demonstration for ${input.leadName}`,
+      description: input.description || "AI-qualified sales appointment and solution walkthrough.",
+      startTime,
+      endTime,
+      timeZone: "Africa/Lagos",
+      meetingPlatform: platform,
+      meetingLink,
+      status: "confirmed",
+      reminders,
+      dealValue: input.dealValue,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.bookings.set(booking.id, booking);
+    const closer = this.closersAvailability.find((c) => c.closerId === closerId);
+    if (closer) {
+      closer.existingBookings.push({ startTime, endTime });
+    }
+    return booking;
+  }
+  async getBookings(organizationId) {
+    return Array.from(this.bookings.values()).filter(
+      (b) => b.organizationId === organizationId || organizationId === "all"
+    );
+  }
+  async getBookingById(bookingId) {
+    return this.bookings.get(bookingId) || null;
+  }
+};
+
+// src/integrations/meta-conversions-adapter.ts
+import { randomUUID as randomUUID7 } from "node:crypto";
+
+// src/domain/offline-conversions.ts
+import { createHash } from "node:crypto";
+function hashPii(value) {
+  if (!value) return void 0;
+  const normalized = value.trim().toLowerCase();
+  return createHash("sha256").update(normalized).digest("hex");
+}
+
+// src/integrations/meta-conversions-adapter.ts
+var MetaConversionsAdapter = class {
+  dispatchedEvents = [];
+  async emitConversion(input) {
+    const eventId2 = `capi_${randomUUID7()}`;
+    const nowSeconds = Math.floor(Date.now() / 1e3);
+    const event = {
+      id: eventId2,
+      organizationId: input.organizationId,
+      leadId: input.leadId,
+      eventName: input.eventName,
+      eventTime: nowSeconds,
+      adPlatform: "meta",
+      userData: {
+        hashedEmail: hashPii(input.userData?.email),
+        hashedPhone: hashPii(input.userData?.phone),
+        hashedFirstName: hashPii(input.userData?.firstName),
+        clientIpAddress: input.userData?.clientIpAddress || "127.0.0.1"
+      },
+      customData: {
+        currency: input.currency || "NGN",
+        value: input.dealValue,
+        leadScore: input.leadScore,
+        serviceType: input.serviceType
+      },
+      status: "dispatched",
+      responsePayload: {
+        events_received: 1,
+        fbtrace_id: `fb_sim_${randomUUID7().slice(0, 10)}`
+      },
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.dispatchedEvents.push(event);
+    return event;
+  }
+  getDispatchedEvents(organizationId) {
+    if (!organizationId) return [...this.dispatchedEvents];
+    return this.dispatchedEvents.filter((e) => e.organizationId === organizationId);
+  }
+};
+
+// src/application/voice-agent-service.ts
+import { randomUUID as randomUUID8 } from "node:crypto";
+
+// src/domain/voice-agent.ts
+function shouldTriggerInstantVoiceCall(leadScore, dealValue, consentGiven = true) {
+  if (!consentGiven) return false;
+  return leadScore >= 85 || dealValue !== void 0 && dealValue >= 2e6;
+}
+
+// src/application/voice-agent-service.ts
+var VoiceAgentService = class {
+  calls = /* @__PURE__ */ new Map();
+  async dispatchOutboundCall(input) {
+    const callId = `call_${randomUUID8().slice(0, 8)}`;
+    const shouldCall = shouldTriggerInstantVoiceCall(input.leadScore, input.dealValue);
+    const call = {
+      id: callId,
+      organizationId: input.organizationId,
+      leadId: input.leadId,
+      leadName: input.leadName,
+      phoneNumber: input.phoneNumber,
+      direction: input.direction || "outbound",
+      status: shouldCall ? "completed" : "queued",
+      durationSeconds: shouldCall ? 142 : 0,
+      recordingUrl: `https://audio.zeerocodes.com/recordings/${callId}.mp3`,
+      transcript: [
+        {
+          speaker: "ai",
+          text: `Hello ${input.leadName}, this is Sarah from Zeerocodes Revenue Engine. I noticed your inquiry regarding enterprise automation. Are you looking to implement this within the next 30 days?`,
+          timestamp: "00:03"
+        },
+        {
+          speaker: "lead",
+          text: `Yes, we are getting over 500 leads a month and need automated qualification right away.`,
+          timestamp: "00:15"
+        },
+        {
+          speaker: "ai",
+          text: `Understood. Our Enterprise tier includes instant 45-second WhatsApp response and closer calendar booking. Would tomorrow at 2:00 PM work for a live walkthrough?`,
+          timestamp: "00:28"
+        },
+        {
+          speaker: "lead",
+          text: `Tomorrow at 2:00 PM works perfectly. Send the Google Meet link to my email.`,
+          timestamp: "00:42"
+        }
+      ],
+      extractedCriteria: {
+        budgetConfirmed: true,
+        decisionMakerConfirmed: true,
+        timelineDays: 14,
+        statedBudget: input.dealValue || 25e5
+      },
+      sentiment: "enthusiastic",
+      closerHandoffRequested: true,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      completedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.calls.set(call.id, call);
+    return call;
+  }
+  async getCalls(organizationId) {
+    return Array.from(this.calls.values()).filter(
+      (c) => c.organizationId === organizationId || organizationId === "all"
+    );
+  }
+  async getCallById(callId) {
+    return this.calls.get(callId) || null;
+  }
+};
+
+// src/domain/subscription-billing.ts
+var SUBSCRIPTION_PLANS = {
+  starter: {
+    id: "starter",
+    name: "Starter Retainer",
+    monthlyFeeNgn: 15e4,
+    monthlyFeeUsd: 250,
+    maxMonthlyLeads: 300,
+    includesVoiceAgent: false,
+    performanceCommissionPercentage: 3.5,
+    features: [
+      "Up to 300 active leads/mo",
+      "Instant 45s AI WhatsApp & Webhook Triage",
+      "Standard Qualification Policy Engine",
+      "2 Closer Seats",
+      "Email & Slack Support"
+    ]
+  },
+  growth: {
+    id: "growth",
+    name: "Growth Engine",
+    monthlyFeeNgn: 35e4,
+    monthlyFeeUsd: 550,
+    maxMonthlyLeads: 1500,
+    includesVoiceAgent: true,
+    performanceCommissionPercentage: 2.5,
+    features: [
+      "Up to 1,500 active leads/mo",
+      "AI Voice Outbound Telephony Calling",
+      "Meta CAPI Closed-Loop ROAS sync",
+      "Revenue Leakage Radar & Automated Recovery",
+      "Unlimited Closer Seats",
+      "Dedicated Account Manager"
+    ]
+  },
+  enterprise: {
+    id: "enterprise",
+    name: "Enterprise Scale",
+    monthlyFeeNgn: 85e4,
+    monthlyFeeUsd: 1200,
+    maxMonthlyLeads: 1e4,
+    includesVoiceAgent: true,
+    performanceCommissionPercentage: 1.5,
+    features: [
+      "10,000+ custom active leads/mo",
+      "Custom LLM Fine-Tuning on Brand Scripts",
+      "Dedicated Webhook Pipelines & RLS Isolation",
+      "Real-Time Omnichannel Voice + WhatsApp",
+      "99.9% SLA & 24/7 Priority Support"
+    ]
+  }
+};
+
 // server.ts
 var app = express();
 var port = Number(process.env.PORT || 3e3);
@@ -3265,6 +3609,9 @@ var sdrDispositionService = new SdrDispositionService(lifecycleService);
 var revenueRecoveryService = new RevenueRecoveryService(workflow, leadStore, lifecycleService, leadEventStore, db);
 var revenueLeakageService = new RevenueLeakageService(leadStore, workflow);
 var salesRepository = new MemorySalesRepository();
+var calendarBookingService = new CalendarBookingService();
+var metaConversionsAdapter = new MetaConversionsAdapter();
+var voiceAgentService = new VoiceAgentService();
 var conversationStore = db ? new PostgresConversationStore(db) : new MemoryConversationStore();
 var messageStore = db ? new PostgresMessageStore(db) : new MemoryMessageStore();
 var conversationService = new ConversationService(leadStore, conversationStore, messageStore);
@@ -3304,7 +3651,7 @@ app.post("/api/auth/dev-session", (req, res) => {
 app.post("/api/public/audit-requests", async (req, res) => {
   try {
     const input = req.body;
-    const auditRequest = createAuditRequest(input, `audit_${randomUUID5()}`);
+    const auditRequest = createAuditRequest(input, `audit_${randomUUID9()}`);
     await auditRequestStore.create(auditRequest);
     return res.status(201).json({ auditRequest, message: "Audit request received successfully" });
   } catch (e) {
@@ -3348,7 +3695,7 @@ app.post("/api/public/lead-intake", async (req, res) => {
     if (followUpRepository) await planInitialFollowUps(followUpRepository, result.lead, result.decision);
     if (webhookDispatcher) {
       await webhookDispatcher.enqueue({
-        id: randomUUID5(),
+        id: randomUUID9(),
         organizationId: tenantId,
         type: "lead.created",
         occurredAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -3415,6 +3762,105 @@ app.post("/api/webhooks/meta", async (req, res) => {
     console.error("Meta webhook processing error:", e);
   }
 });
+app.post("/api/calendar/bookings", async (req, res) => {
+  try {
+    const booking = await calendarBookingService.createBooking({
+      organizationId: String(req.body?.organizationId || req.query?.tenant || "demo-tenant"),
+      leadId: String(req.body?.leadId || `lead_${Date.now()}`),
+      leadName: String(req.body?.leadName || "Prospective Client"),
+      leadPhone: String(req.body?.leadPhone || "+234 800 000 0000"),
+      leadEmail: String(req.body?.leadEmail || "client@example.com"),
+      title: req.body?.title,
+      description: req.body?.description,
+      preferredPlatform: req.body?.preferredPlatform,
+      dealValue: req.body?.dealValue,
+      customStartTime: req.body?.customStartTime
+    });
+    return res.status(201).json({ success: true, booking });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Booking creation failed" });
+  }
+});
+app.get("/api/calendar/bookings", async (req, res) => {
+  try {
+    const tenantId = String(req.query?.tenant || "demo-tenant");
+    const bookings = await calendarBookingService.getBookings(tenantId);
+    return res.json({ bookings });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Failed to fetch bookings" });
+  }
+});
+app.post("/api/conversions/emit", async (req, res) => {
+  try {
+    const event = await metaConversionsAdapter.emitConversion({
+      organizationId: String(req.body?.organizationId || req.query?.tenant || "demo-tenant"),
+      leadId: String(req.body?.leadId || `lead_${Date.now()}`),
+      eventName: req.body?.eventName || "Purchase",
+      dealValue: req.body?.dealValue,
+      currency: req.body?.currency || "NGN",
+      leadScore: req.body?.leadScore,
+      serviceType: req.body?.serviceType,
+      userData: req.body?.userData
+    });
+    return res.status(201).json({ success: true, event });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Conversion dispatch failed" });
+  }
+});
+app.get("/api/conversions/events", async (req, res) => {
+  try {
+    const tenantId = String(req.query?.tenant || "demo-tenant");
+    const events = metaConversionsAdapter.getDispatchedEvents(tenantId);
+    return res.json({ events });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Failed to fetch conversion events" });
+  }
+});
+app.post("/api/voice/calls", async (req, res) => {
+  try {
+    const call = await voiceAgentService.dispatchOutboundCall({
+      organizationId: String(req.body?.organizationId || req.query?.tenant || "demo-tenant"),
+      leadId: String(req.body?.leadId || `lead_${Date.now()}`),
+      leadName: String(req.body?.leadName || "Inbound Prospect"),
+      phoneNumber: String(req.body?.phoneNumber || "+234 800 000 0000"),
+      leadScore: Number(req.body?.leadScore || 90),
+      dealValue: req.body?.dealValue ? Number(req.body.dealValue) : void 0
+    });
+    return res.status(201).json({ success: true, call });
+  } catch (e) {
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Voice dispatch failed" });
+  }
+});
+app.get("/api/voice/calls", async (req, res) => {
+  try {
+    const tenantId = String(req.query?.tenant || "demo-tenant");
+    const calls = await voiceAgentService.getCalls(tenantId);
+    return res.json({ calls });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Failed to fetch voice calls" });
+  }
+});
+app.get("/api/billing/usage", async (req, res) => {
+  try {
+    const tenantId = String(req.query?.tenant || "demo-tenant");
+    const usage = {
+      organizationId: tenantId,
+      currentPlan: "growth",
+      billingCycleStart: "01 Sept 2026",
+      billingCycleEnd: "01 Oct 2026",
+      leadsIngestedCount: 247,
+      leadsIngestedLimit: 1500,
+      voiceMinutesUsed: 42,
+      voiceMinutesLimit: 200,
+      whatsappMessagesSent: 892,
+      closedWonAttributedRevenue: 184e5,
+      commissionPayableNgn: 46e4
+    };
+    return res.json({ usage, plans: SUBSCRIPTION_PLANS });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Failed to fetch billing usage" });
+  }
+});
 async function authMiddleware(req, res, next) {
   try {
     let context;
@@ -3475,7 +3921,7 @@ app.post("/api/leads/intake", async (req, res) => {
     requireRole(c, "agent");
     const result = await revenueEngine.intake({ ...req.body, organizationId: c.tenantId });
     if (followUpRepository) await planInitialFollowUps(followUpRepository, result.lead, result.decision);
-    if (webhookDispatcher) await webhookDispatcher.enqueue({ id: randomUUID5(), organizationId: c.tenantId, type: "lead.created", occurredAt: (/* @__PURE__ */ new Date()).toISOString(), payload: { lead: result.lead, decision: result.decision } });
+    if (webhookDispatcher) await webhookDispatcher.enqueue({ id: randomUUID9(), organizationId: c.tenantId, type: "lead.created", occurredAt: (/* @__PURE__ */ new Date()).toISOString(), payload: { lead: result.lead, decision: result.decision } });
     return res.status(201).json(result);
   } catch (e) {
     return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : "Invalid lead intake" });
@@ -3576,13 +4022,13 @@ app.post("/api/leads/:id/appointments", async (req, res) => {
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const previousState = lead.state;
     const nextState = transitionLead(previousState, "booked");
-    const appointment = { id: randomUUID5(), organizationId: c.tenantId, leadId: lead.id, scheduledAt: scheduledAt.toISOString(), status: "scheduled", ownerUserId: c.userId, source: req.body.source, idempotencyKey, metadata: req.body.metadata, createdAt: now, updatedAt: now };
+    const appointment = { id: randomUUID9(), organizationId: c.tenantId, leadId: lead.id, scheduledAt: scheduledAt.toISOString(), status: "scheduled", ownerUserId: c.userId, source: req.body.source, idempotencyKey, metadata: req.body.metadata, createdAt: now, updatedAt: now };
     await workflow.saveAppointment(appointment);
     lead.state = nextState;
     lead.updatedAt = now;
     await leadStore.save(lead);
-    await leadEventStore.append({ id: randomUUID5(), leadId: lead.id, organizationId: c.tenantId, type: "lead.booked", actor: "sdr", timestamp: now, fromState: previousState, toState: nextState, reason: "appointment booked", metadata: { appointmentId: appointment.id, idempotencyKey } });
-    if (webhookDispatcher) await webhookDispatcher.enqueue({ id: randomUUID5(), organizationId: c.tenantId, type: "appointment.booked", occurredAt: now, payload: { lead, appointment } });
+    await leadEventStore.append({ id: randomUUID9(), leadId: lead.id, organizationId: c.tenantId, type: "lead.booked", actor: "sdr", timestamp: now, fromState: previousState, toState: nextState, reason: "appointment booked", metadata: { appointmentId: appointment.id, idempotencyKey } });
+    if (webhookDispatcher) await webhookDispatcher.enqueue({ id: randomUUID9(), organizationId: c.tenantId, type: "appointment.booked", occurredAt: now, payload: { lead, appointment } });
     return res.status(201).json({ appointment, lead });
   } catch (e) {
     return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : "Unable to book appointment" });
@@ -3614,7 +4060,7 @@ app.post("/api/leads/:id/outcome", async (req, res) => {
       }
     }
     const now = (/* @__PURE__ */ new Date()).toISOString();
-    const outcomeRecord = { id: randomUUID5(), organizationId: c.tenantId, leadId: lead.id, outcome, revenueAmount: typeof req.body.revenueAmount === "number" ? req.body.revenueAmount : null, currency: req.body.currency || "NGN", reason: req.body.reason, ownerUserId: c.userId, idempotencyKey, occurredAt: now, metadata: req.body.metadata };
+    const outcomeRecord = { id: randomUUID9(), organizationId: c.tenantId, leadId: lead.id, outcome, revenueAmount: typeof req.body.revenueAmount === "number" ? req.body.revenueAmount : null, currency: req.body.currency || "NGN", reason: req.body.reason, ownerUserId: c.userId, idempotencyKey, occurredAt: now, metadata: req.body.metadata };
     const previousState = lead.state;
     const targetState = outcome === "won" ? "won" : outcome === "no_show" || outcome === "cancelled" ? "nurture" : "lost";
     if (!canTransition(previousState, targetState)) throw new Error(`Outcome ${outcome} cannot move lead from ${previousState} to ${targetState}`);
@@ -3623,11 +4069,11 @@ app.post("/api/leads/:id/outcome", async (req, res) => {
     lead.state = nextState;
     lead.updatedAt = now;
     await leadStore.save(lead);
-    await leadEventStore.append({ id: randomUUID5(), leadId: lead.id, organizationId: c.tenantId, type: outcome === "won" ? "lead.won" : "lead.lost", actor: "closer", timestamp: now, fromState: previousState, toState: nextState, reason: outcomeRecord.reason || outcome, metadata: { outcomeId: outcomeRecord.id, revenueAmount: outcomeRecord.revenueAmount, idempotencyKey } });
+    await leadEventStore.append({ id: randomUUID9(), leadId: lead.id, organizationId: c.tenantId, type: outcome === "won" ? "lead.won" : "lead.lost", actor: "closer", timestamp: now, fromState: previousState, toState: nextState, reason: outcomeRecord.reason || outcome, metadata: { outcomeId: outcomeRecord.id, revenueAmount: outcomeRecord.revenueAmount, idempotencyKey } });
     if (outcome === "won" && outcomeRecord.revenueAmount) {
-      await workflow.saveAttribution({ id: randomUUID5(), organizationId: c.tenantId, leadId: lead.id, outcomeId: outcomeRecord.id, source: lead.source, campaign: String(lead.metadata?.campaign || ""), medium: String(lead.metadata?.medium || ""), attributionModel: "first_touch", attributedAmount: outcomeRecord.revenueAmount, currency: outcomeRecord.currency, createdAt: now });
+      await workflow.saveAttribution({ id: randomUUID9(), organizationId: c.tenantId, leadId: lead.id, outcomeId: outcomeRecord.id, source: lead.source, campaign: String(lead.metadata?.campaign || ""), medium: String(lead.metadata?.medium || ""), attributionModel: "first_touch", attributedAmount: outcomeRecord.revenueAmount, currency: outcomeRecord.currency, createdAt: now });
     }
-    if (webhookDispatcher) await webhookDispatcher.enqueue({ id: randomUUID5(), organizationId: c.tenantId, type: "lead.outcome", occurredAt: now, payload: { lead, outcome: outcomeRecord } });
+    if (webhookDispatcher) await webhookDispatcher.enqueue({ id: randomUUID9(), organizationId: c.tenantId, type: "lead.outcome", occurredAt: now, payload: { lead, outcome: outcomeRecord } });
     return res.json({ lead, outcome: outcomeRecord });
   } catch (e) {
     return res.status(tenantError(e)).json({ error: e instanceof Error ? e.message : "Unable to record outcome" });

@@ -30,6 +30,7 @@ import OperationalDashboard from './features/dashboard/OperationalDashboard';
 import ClientDashboard from './features/dashboard/ClientDashboard';
 import OnboardingWizard from './features/onboarding/OnboardingWizard';
 import QualifyLogicWorkspace from './features/revenue-engine/QualifyLogicWorkspace';
+import BillingWorkspace from './features/revenue-engine/BillingWorkspace';
 import SalesPipelineWorkspace from './features/sales/SalesPipelineWorkspace';
 import ActivitiesWorkspace from './features/sales/ActivitiesWorkspace';
 import UnifiedInboxWorkspace from './features/inbox/UnifiedInboxWorkspace';
@@ -59,6 +60,7 @@ const navItems: NavItem[] = [
   { id: 'Follow-ups', hash: 'follow-ups', label: '03 Follow-ups', icon: Repeat },
   { id: 'Leads', hash: 'leads', label: '05 Lead Database', icon: Inbox },
   { id: 'Revenue', hash: 'analytics', label: '04 Analytics', icon: CircleDollarSign },
+  { id: 'Billing', hash: 'billing', label: '06 Billing', icon: CircleDollarSign },
   { id: 'Inbox', hash: 'inbox', label: 'Live Inbox', icon: MessageSquare, badge: 'AI' },
   { id: 'Pipeline', hash: 'pipeline', label: 'Deals CRM', icon: Zap, badge: 'Sales' },
   { id: 'Onboarding', hash: 'onboarding', label: 'Onboarding', icon: ShieldCheck, badge: 'Setup' },
@@ -76,6 +78,7 @@ export default function App() {
     if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') return 'Follow-ups';
     if (hash === 'leads' || hash === 'database') return 'Leads';
     if (hash === 'analytics' || hash === 'revenue' || hash === 'reporting') return 'Revenue';
+    if (hash === 'billing' || hash === 'subscription') return 'Billing';
     if (hash === 'onboarding' || hash === 'setup') return 'Onboarding';
     if (hash === 'inbox' || hash === 'messages') return 'Inbox';
     if (hash === 'pipeline' || hash === 'deals') return 'Pipeline';
@@ -256,6 +259,7 @@ export default function App() {
         {activeTab === 'Follow-ups' && <FollowUpCadenceWorkspace session={session} />}
         {activeTab === 'Leads' && <LeadWorkspace session={session} />}
         {activeTab === 'Revenue' && <RevenueAttributionWorkspace session={session} />}
+        {activeTab === 'Billing' && <BillingWorkspace session={session} />}
         {activeTab === 'Onboarding' && <OnboardingWizard session={session} onNavigate={navigateTo} />}
         {activeTab === 'Inbox' && <UnifiedInboxWorkspace session={session} />}
         {activeTab === 'Pipeline' && <SalesPipelineWorkspace session={session} />}
