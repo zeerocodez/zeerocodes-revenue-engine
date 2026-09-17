@@ -1,4 +1,4 @@
-export type TenantRole = 'owner' | 'admin' | 'manager' | 'agent' | 'viewer';
+export type TenantRole = 'owner' | 'admin' | 'manager' | 'agent' | 'closer' | 'viewer';
 
 export interface TenantRecord {
   id: string;

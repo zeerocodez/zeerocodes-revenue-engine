@@ -3,6 +3,7 @@ import type { TenantContext, TenantRole } from '../domain/tenant';
 const roleRank: Record<TenantRole, number> = {
   viewer: 10,
   agent: 20,
+  closer: 25,
   manager: 30,
   admin: 40,
   owner: 50,

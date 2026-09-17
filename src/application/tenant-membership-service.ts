@@ -24,7 +24,7 @@ export class TenantMembershipService {
 
   async requireRole(userId: string, tenantId: string, minimumRole: TenantRole): Promise<TenantUser> {
     const membership = await this.authenticate(userId, tenantId);
-    const rank: Record<TenantRole, number> = { viewer: 10, agent: 20, manager: 30, admin: 40, owner: 50 };
+    const rank: Record<TenantRole, number> = { viewer: 10, agent: 20, closer: 25, manager: 30, admin: 40, owner: 50 };
     if (rank[membership.role] < rank[minimumRole]) throw new Error('Insufficient tenant role');
     return membership;
   }

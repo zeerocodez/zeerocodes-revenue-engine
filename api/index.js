@@ -1620,7 +1620,7 @@ var TenantMembershipService = class {
   }
   async requireRole(userId, tenantId, minimumRole) {
     const membership = await this.authenticate(userId, tenantId);
-    const rank = { viewer: 10, agent: 20, manager: 30, admin: 40, owner: 50 };
+    const rank = { viewer: 10, agent: 20, closer: 25, manager: 30, admin: 40, owner: 50 };
     if (rank[membership.role] < rank[minimumRole]) throw new Error("Insufficient tenant role");
     return membership;
   }
@@ -1637,7 +1637,7 @@ var MembershipIdentityResolver = class {
   }
 };
 function requireRole(context, minimum) {
-  const rank = { viewer: 10, agent: 20, manager: 30, admin: 40, owner: 50 };
+  const rank = { viewer: 10, agent: 20, closer: 25, manager: 30, admin: 40, owner: 50 };
   if (rank[context.role] < rank[minimum]) throw new Error("Insufficient tenant role");
 }
 

@@ -38,6 +38,6 @@ export class StaticIdentityResolver implements IdentityResolver {
 }
 
 export function requireRole(context: AuthenticatedRequestContext, minimum: TenantRole): void {
-  const rank: Record<TenantRole, number> = { viewer: 10, agent: 20, manager: 30, admin: 40, owner: 50 };
+  const rank: Record<TenantRole, number> = { viewer: 10, agent: 20, closer: 25, manager: 30, admin: 40, owner: 50 };
   if (rank[context.role] < rank[minimum]) throw new Error('Insufficient tenant role');
 }
