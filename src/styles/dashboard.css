@@ -637,9 +637,148 @@
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* Responsive utilities */
-@media (max-width: 1024px) {
-  .top-nav { padding: 0 16px; }
-  .dashboard-canvas { padding: 20px 16px; }
-  .nav-tabs { display: none; }
+/* ==========================================================================
+   Mobile-First & Comprehensive Responsive Rules
+   ========================================================================== */
+
+/* Touch-friendly buttons and inputs */
+@media (hover: none) and (pointer: coarse) {
+  button, .nav-tab-btn, .tenant-selector, input, select {
+    min-height: 40px;
+  }
 }
+
+/* Tablet & Smaller Desktop (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .top-nav {
+    padding: 0 16px;
+    height: 64px;
+  }
+  .dashboard-canvas {
+    padding: 16px 12px;
+  }
+  .nav-tabs {
+    overflow-x: auto;
+    max-width: calc(100vw - 220px);
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Mobile Devices (max-width: 768px) */
+@media (max-width: 768px) {
+  .top-nav {
+    padding: 0 12px;
+    height: auto;
+    min-height: 60px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .top-nav-left {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .top-nav-right {
+    width: 100%;
+    justify-content: space-between;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(17, 21, 18, 0.08);
+  }
+
+  .nav-tabs {
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    display: flex;
+    padding: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .nav-tab-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .view-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .view-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .view-actions button, .view-actions .btn-accent, .view-actions .btn-secondary {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .kpi-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* 5-card metric row stacks cleanly */
+  div[style*="repeat(5, 1fr)"] {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* 3-column inbox becomes responsive single column */
+  div[style*="320px 1fr 340px"],
+  div[style*="320px 1fr 300px"] {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+    gap: 12px !important;
+  }
+
+  /* 2-column grids (like appointments + ROI simulator) stack vertically */
+  div[style*="1.4fr 1fr"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+  }
+
+  /* Form 2-column grids stack on mobile */
+  div[style*="gridTemplateColumns: '1fr 1fr'"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .table-card {
+    padding: 14px;
+    overflow-x: auto;
+  }
+
+  .dark-panel {
+    padding: 16px;
+  }
+
+  .kanban-board {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .kanban-column {
+    min-width: 280px;
+    max-width: 280px;
+  }
+}
+
