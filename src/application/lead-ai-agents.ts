@@ -1,5 +1,5 @@
-import { decideConversation, renderSafeConversationReply, type ConversationDecision } from '../domain/conversation-decision-engine';
-import { getNextQualificationQuestion, getQualificationProgress } from '../domain/qualification-question-engine';
+import { renderSafeConversationReply, type ConversationDecision } from '../domain/conversation-decision-engine';
+import { getNextQualificationQuestion, getQualificationProgress, type QualificationField } from '../domain/qualification-question-engine';
 import type { ClientConfiguration } from '../domain/client-configuration';
 import type { LeadRecord } from '../domain/lead';
 import type { MessageChannel } from '../domain/message';
@@ -15,17 +15,13 @@ export interface LeadAgentResult {
   decision?: ConversationDecision;
 }
 
-/**
- * Deterministic first-response agent. It never invents pricing, promises outcomes,
- * or bypasses the qualification policy. A model provider can replace the copy
- * layer later without changing the qualification/routing contract.
- */
+/** Deterministic first-response agent with policy-safe copy. */
 export class LeadResponseAgent {
   constructor(private readonly conversations: ConversationService) {}
 
   async sendInitialResponse(lead: LeadRecord, configuration: ClientConfiguration, channel: MessageChannel = 'web'): Promise<string> {
     const asked = Array.isArray(lead.metadata?.qualificationAsked)
-      ? lead.metadata.qualificationAsked.filter((value): value is string => typeof value === 'string')
+      ? lead.metadata.qualificationAsked.filter((value): value is QualificationField => typeof value === 'string')
       : [];
     const progress = getQualificationProgress(lead.profile, configuration.qualification, asked);
     const next = getNextQualificationQuestion(lead.profile, configuration.qualification, asked);
@@ -54,10 +50,7 @@ export class LeadQualificationAgent {
   }
 }
 
-/**
- * Coordinates the two agents: instant acknowledgement/question on intake,
- * then qualification + safe response on every inbound message.
- */
+/** Coordinates instant response, qualification, routing and safe response. */
 export class LeadAIAgentOrchestrator {
   constructor(
     private readonly leads: LeadStore,
@@ -83,12 +76,6 @@ export class LeadAIAgentOrchestrator {
 
     const result = await this.qualification.qualify(input.leadId, input.organizationId, input.text, input.configuration);
     const response = await this.responses.respondToDecision(lead, result.conversationDecision, result.nextQuestion, input.channel ?? 'web');
-    return {
-      lead: result.lead,
-      response,
-      responseSent: Boolean(response),
-      qualification: result,
-      decision: result.conversationDecision,
-    };
+    return { lead: result.lead, response, responseSent: Boolean(response), qualification: result, decision: result.conversationDecision };
   }
 }
