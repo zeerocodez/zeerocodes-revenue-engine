@@ -54,6 +54,7 @@ import { SUBSCRIPTION_PLANS, TenantUsageSummary } from './src/domain/subscriptio
 import { evaluateLeadQualificationWithOpenAI, generateSetterHandoffScriptWithOpenAI } from './src/integrations/openai-client';
 import { sendWhatsAppMessage } from './src/integrations/whatsapp-client';
 import { dispatchOutboundVapiCall, listVapiAssistants } from './src/integrations/vapi-client';
+import { initializePaystackTransaction, verifyPaystackTransaction } from './src/integrations/paystack-client';
 
 const app = express(), port = Number(process.env.PORT || 3000), usePostgres = Boolean(process.env.DATABASE_URL);
 
@@ -258,6 +259,35 @@ app.get('/api/vapi/assistants', async (_req, res) => {
     return res.json({ assistants });
   } catch (e) {
     return res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to fetch Vapi assistants' });
+  }
+});
+
+// Paystack Subscription & Performance Fee Checkout Initialize
+app.post('/api/paystack/initialize', async (req, res) => {
+  try {
+    const { email, amountKobo, reference, callbackUrl, metadata } = req.body;
+    if (!email || !amountKobo) return res.status(400).json({ error: 'Missing required parameters: email, amountKobo' });
+    const result = await initializePaystackTransaction({
+      email,
+      amountKobo,
+      reference,
+      callbackUrl,
+      metadata,
+    });
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Paystack initialization failed' });
+  }
+});
+
+// Paystack Verification
+app.get('/api/paystack/verify/:reference', async (req, res) => {
+  try {
+    const { reference } = req.params;
+    const result = await verifyPaystackTransaction(reference);
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Paystack verification failed' });
   }
 });
 
