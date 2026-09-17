@@ -55,6 +55,8 @@ import { evaluateLeadQualificationWithOpenAI, generateSetterHandoffScriptWithOpe
 import { sendWhatsAppMessage } from './src/integrations/whatsapp-client';
 import { dispatchOutboundVapiCall, listVapiAssistants } from './src/integrations/vapi-client';
 import { initializePaystackTransaction, verifyPaystackTransaction } from './src/integrations/paystack-client';
+import { runFullPreFlightAudit } from './src/integrations/system-health-service';
+import { sendWhatsAppTemplate, CANONICAL_TEMPLATES } from './src/integrations/whatsapp-template-service';
 
 const app = express(), port = Number(process.env.PORT || 3000), usePostgres = Boolean(process.env.DATABASE_URL);
 
@@ -288,6 +290,38 @@ app.get('/api/paystack/verify/:reference', async (req, res) => {
     return res.json(result);
   } catch (e) {
     return res.status(500).json({ error: e instanceof Error ? e.message : 'Paystack verification failed' });
+  }
+});
+
+// Live Pre-Flight System Health & Diagnostics Audit
+app.get('/api/system/preflight-health', async (_req, res) => {
+  try {
+    const report = await runFullPreFlightAudit();
+    return res.json(report);
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Health check failed' });
+  }
+});
+
+// List Canonical WhatsApp Templates
+app.get('/api/whatsapp/templates', (_req, res) => {
+  return res.json({ templates: CANONICAL_TEMPLATES });
+});
+
+// Dispatch Approved WhatsApp Template
+app.post('/api/whatsapp/templates/send', async (req, res) => {
+  try {
+    const { to, templateName, languageCode, bodyParameters } = req.body;
+    if (!to || !templateName) return res.status(400).json({ error: 'Missing to or templateName' });
+    const result = await sendWhatsAppTemplate({
+      to,
+      templateName,
+      languageCode,
+      bodyParameters,
+    });
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Template dispatch failed' });
   }
 });
 
