@@ -29,6 +29,7 @@ import {
 import OperationalDashboard from './features/dashboard/OperationalDashboard';
 import ClientDashboard from './features/dashboard/ClientDashboard';
 import OnboardingWizard from './features/onboarding/OnboardingWizard';
+import QualifyLogicWorkspace from './features/revenue-engine/QualifyLogicWorkspace';
 import SalesPipelineWorkspace from './features/sales/SalesPipelineWorkspace';
 import ActivitiesWorkspace from './features/sales/ActivitiesWorkspace';
 import UnifiedInboxWorkspace from './features/inbox/UnifiedInboxWorkspace';
@@ -54,18 +55,16 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'Ops Hub', hash: 'operational', label: 'Executive Ops', icon: LayoutDashboard, badge: 'Live' },
   { id: 'Client Portal', hash: 'client-portal', label: 'Client Portal', icon: BarChart3 },
-  { id: 'Onboarding', hash: 'onboarding', label: 'Onboarding & Rules', icon: Sparkles, badge: 'Setup' },
+  { id: 'Qualify Logic', hash: 'qualify-logic', label: '08 Qualify Logic', icon: Sparkles, badge: 'AI Brain' },
+  { id: 'Follow-ups', hash: 'follow-ups', label: '03 Follow-ups', icon: Repeat },
+  { id: 'Leads', hash: 'leads', label: '05 Lead Database', icon: Inbox },
+  { id: 'Revenue', hash: 'analytics', label: '04 Analytics', icon: CircleDollarSign },
   { id: 'Inbox', hash: 'inbox', label: 'Live Inbox', icon: MessageSquare, badge: 'AI' },
-  { id: 'Pipeline', hash: 'pipeline', label: 'Deals & CRM', icon: Zap, badge: 'Sales' },
-  { id: 'Follow-ups', hash: 'follow-ups', label: 'Cadences', icon: Repeat },
-  { id: 'SDR Queue', hash: 'sdr-queue', label: 'SDR Workstation', icon: GitBranch },
-  { id: 'Integrations', hash: 'integrations', label: 'Integrations & Sim', icon: Radio },
+  { id: 'Pipeline', hash: 'pipeline', label: 'Deals CRM', icon: Zap, badge: 'Sales' },
+  { id: 'Onboarding', hash: 'onboarding', label: 'Onboarding', icon: ShieldCheck, badge: 'Setup' },
+  { id: 'Integrations', hash: 'integrations', label: '07 Integrations', icon: Radio },
   { id: 'Templates', hash: 'templates', label: 'Templates', icon: FileText },
-  { id: 'Activities', hash: 'activities', label: 'Activities', icon: CheckSquare },
-  { id: 'Leads', hash: 'leads', label: 'Leads', icon: Inbox },
-  { id: 'Lead Sources', hash: 'sources', label: 'Sources', icon: Globe },
-  { id: 'Revenue', hash: 'revenue', label: 'Attribution', icon: CircleDollarSign },
-  { id: 'Settings', hash: 'settings', label: 'Team & RBAC', icon: Shield },
+  { id: 'Settings', hash: 'settings', label: 'Settings', icon: Shield },
 ];
 
 export default function App() {
@@ -73,17 +72,15 @@ export default function App() {
     const hash = window.location.hash.replace('#', '').toLowerCase();
     if (hash === 'operational' || hash === 'overview') return 'Ops Hub';
     if (hash === 'client-portal' || hash === 'client') return 'Client Portal';
+    if (hash === 'qualify-logic' || hash === 'qualify' || hash === 'rules') return 'Qualify Logic';
+    if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') return 'Follow-ups';
+    if (hash === 'leads' || hash === 'database') return 'Leads';
+    if (hash === 'analytics' || hash === 'revenue' || hash === 'reporting') return 'Revenue';
     if (hash === 'onboarding' || hash === 'setup') return 'Onboarding';
     if (hash === 'inbox' || hash === 'messages') return 'Inbox';
     if (hash === 'pipeline' || hash === 'deals') return 'Pipeline';
-    if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') return 'Follow-ups';
     if (hash === 'integrations' || hash === 'simulator') return 'Integrations';
     if (hash === 'templates') return 'Templates';
-    if (hash === 'activities' || hash === 'tasks') return 'Activities';
-    if (hash === 'sdr-queue' || hash === 'sdr') return 'SDR Queue';
-    if (hash === 'leads') return 'Leads';
-    if (hash === 'sources' || hash === 'lead-sources') return 'Lead Sources';
-    if (hash === 'revenue') return 'Revenue';
     if (hash === 'settings') return 'Settings';
     return 'Landing';
   });
@@ -134,17 +131,15 @@ export default function App() {
       if (hash === 'landing' || hash === '') setActiveTab('Landing');
       else if (hash === 'operational' || hash === 'overview') setActiveTab('Ops Hub');
       else if (hash === 'client-portal' || hash === 'client') setActiveTab('Client Portal');
+      else if (hash === 'qualify-logic' || hash === 'qualify' || hash === 'rules') setActiveTab('Qualify Logic');
+      else if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') setActiveTab('Follow-ups');
+      else if (hash === 'leads' || hash === 'database') setActiveTab('Leads');
+      else if (hash === 'analytics' || hash === 'revenue' || hash === 'reporting') setActiveTab('Revenue');
       else if (hash === 'onboarding' || hash === 'setup') setActiveTab('Onboarding');
       else if (hash === 'inbox' || hash === 'messages') setActiveTab('Inbox');
       else if (hash === 'pipeline' || hash === 'deals') setActiveTab('Pipeline');
-      else if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') setActiveTab('Follow-ups');
       else if (hash === 'integrations' || hash === 'simulator') setActiveTab('Integrations');
       else if (hash === 'templates') setActiveTab('Templates');
-      else if (hash === 'activities' || hash === 'tasks') setActiveTab('Activities');
-      else if (hash === 'sdr-queue' || hash === 'sdr') setActiveTab('SDR Queue');
-      else if (hash === 'leads') setActiveTab('Leads');
-      else if (hash === 'sources' || hash === 'lead-sources') setActiveTab('Lead Sources');
-      else if (hash === 'revenue') setActiveTab('Revenue');
       else if (hash === 'settings') setActiveTab('Settings');
     };
     window.addEventListener('hashchange', handleHash);
@@ -257,17 +252,15 @@ export default function App() {
       <main style={{ flex: 1 }}>
         {activeTab === 'Ops Hub' && <OperationalDashboard session={session} onNavigate={navigateTo} />}
         {activeTab === 'Client Portal' && <ClientDashboard session={session} onNavigate={navigateTo} />}
+        {activeTab === 'Qualify Logic' && <QualifyLogicWorkspace session={session} onNavigate={navigateTo} />}
+        {activeTab === 'Follow-ups' && <FollowUpCadenceWorkspace session={session} />}
+        {activeTab === 'Leads' && <LeadWorkspace session={session} />}
+        {activeTab === 'Revenue' && <RevenueAttributionWorkspace session={session} />}
         {activeTab === 'Onboarding' && <OnboardingWizard session={session} onNavigate={navigateTo} />}
         {activeTab === 'Inbox' && <UnifiedInboxWorkspace session={session} />}
         {activeTab === 'Pipeline' && <SalesPipelineWorkspace session={session} />}
-        {activeTab === 'Follow-ups' && <FollowUpCadenceWorkspace session={session} />}
-        {activeTab === 'SDR Queue' && <SdrQueueWorkspace />}
         {activeTab === 'Integrations' && <IntegrationsHubWorkspace session={session} />}
         {activeTab === 'Templates' && <TemplatesWorkspace session={session} />}
-        {activeTab === 'Activities' && <ActivitiesWorkspace session={session} />}
-        {activeTab === 'Leads' && <LeadWorkspace />}
-        {activeTab === 'Lead Sources' && <LeadSourcesWorkspace />}
-        {activeTab === 'Revenue' && <RevenueAttributionWorkspace />}
         {activeTab === 'Settings' && <SettingsWorkspace />}
       </main>
 
