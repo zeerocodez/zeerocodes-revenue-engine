@@ -51,6 +51,7 @@ import { CalendarBookingService } from './src/application/calendar-booking-servi
 import { MetaConversionsAdapter } from './src/integrations/meta-conversions-adapter';
 import { VoiceAgentService } from './src/application/voice-agent-service';
 import { SUBSCRIPTION_PLANS, TenantUsageSummary } from './src/domain/subscription-billing';
+import { evaluateLeadQualificationWithOpenAI, generateSetterHandoffScriptWithOpenAI } from './src/integrations/openai-client';
 
 const app = express(), port = Number(process.env.PORT || 3000), usePostgres = Boolean(process.env.DATABASE_URL);
 
@@ -196,6 +197,26 @@ app.post('/api/public/lead-intake', async (req, res) => {
     });
   } catch (e) {
     return res.status(400).json({ error: e instanceof Error ? e.message : 'Invalid public lead intake submission' });
+  }
+});
+
+// Live AI Lead Qualification Endpoint (Powered by OpenAI GPT-4o-mini)
+app.post('/api/ai/qualify', async (req, res) => {
+  try {
+    const result = await evaluateLeadQualificationWithOpenAI(req.body);
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'AI Qualification failed' });
+  }
+});
+
+// Live AI Setter Script Synthesis Endpoint (Powered by OpenAI GPT-4o-mini)
+app.post('/api/ai/generate-script', async (req, res) => {
+  try {
+    const result = await generateSetterHandoffScriptWithOpenAI(req.body);
+    return res.json(result);
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'AI Script generation failed' });
   }
 });
 
