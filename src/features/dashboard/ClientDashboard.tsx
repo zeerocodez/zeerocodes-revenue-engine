@@ -1,13 +1,21 @@
 import { useState } from 'react';
 import {
+  AlertTriangle,
+  ArrowRight,
   Calendar,
   CheckCircle2,
   ChevronRight,
   Download,
   Flame,
   Globe,
+  HelpCircle,
   MessageSquare,
   PhoneCall,
+  Play,
+  RefreshCw,
+  Rocket,
+  Shield,
+  ShieldCheck,
   Sliders,
   Sparkles,
   TrendingUp,
@@ -24,6 +32,7 @@ interface ClientDashboardProps {
 export default function ClientDashboard({ session, onNavigate }: ClientDashboardProps) {
   const [roiLeadValue, setRoiLeadValue] = useState<number>(350000);
   const [roiMonthlyLeads, setRoiMonthlyLeads] = useState<number>(200);
+  const [recoveryTriggered, setRecoveryTriggered] = useState<boolean>(false);
 
   // Dynamic ROI calculation
   const qualifiedLeads = Math.round(roiMonthlyLeads * 0.65);
@@ -33,88 +42,223 @@ export default function ClientDashboard({ session, onNavigate }: ClientDashboard
   const netProfit = projectedRevenue - softwareCost;
   const calculatedRoi = Math.round((netProfit / softwareCost) * 100);
 
+  const handleTriggerRecovery = () => {
+    setRecoveryTriggered(true);
+    setTimeout(() => {
+      alert('⚡ Zeerocodes Revenue Recovery Engine initiated! AI recovery cadences dispatched across WhatsApp, SMS & Email for 37 stalled leads.');
+      setRecoveryTriggered(false);
+    }, 600);
+  };
+
   return (
     <div className="dashboard-canvas">
-      {/* Header */}
-      <div className="view-header">
-        <div className="view-title-group">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span className="role-badge" style={{ background: '#dbeafe', color: '#1d4ed8' }}>Client Tenant Portal</span>
-            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Organization: <strong>{session.tenantName}</strong></span>
+      {/* Operating Model Division Banner */}
+      <div
+        style={{
+          background: 'var(--ink)',
+          color: '#fff',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          marginBottom: '20px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          border: '1px solid var(--dark-border)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div
+            style={{
+              width: '42px',
+              height: '42px',
+              borderRadius: '8px',
+              background: 'rgba(199, 255, 85, 0.15)',
+              display: 'grid',
+              placeItems: 'center',
+              color: 'var(--accent)',
+            }}
+          >
+            <ShieldCheck size={22} />
           </div>
-          <h1>
-            Client Growth & Revenue Portal
-            <span style={{ fontSize: '14px', background: 'var(--accent-bg)', color: 'var(--accent-deep)', padding: '3px 10px', borderRadius: '999px', fontWeight: 700 }}>
-              Active
-            </span>
-          </h1>
-          <p>Self-service visibility into your inbound sales pipeline, booked customer meetings, conversion rates, and ROI.</p>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '15px', fontWeight: 800 }}>Revenue Command Center: {session.tenantName}</span>
+              <span className="role-badge superadmin" style={{ fontSize: '11px', background: 'var(--accent)', color: 'var(--ink)' }}>
+                OPERATING MODE: REVENUE ENGINE
+              </span>
+            </div>
+            <p style={{ fontSize: '12.5px', color: 'var(--dark-muted)', margin: '2px 0 0 0' }}>
+              <strong>Client Role:</strong> Owns lead sources & closes qualified appointments. <strong>Zeerocodes Role:</strong> Operates 45s response, qualification & recovery.
+            </p>
+          </div>
         </div>
 
-        <div className="view-actions">
-          <button className="btn-secondary" onClick={() => alert('Exporting monthly audit & revenue report (PDF/CSV)...')}>
-            <Download size={15} /> Export Audit Report
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            className="btn-secondary"
+            onClick={() => onNavigate?.('Onboarding')}
+            style={{ background: 'var(--dark-surface)', color: 'var(--accent)', borderColor: 'var(--dark-border)', padding: '6px 12px', fontSize: '12px' }}
+          >
+            <Sliders size={14} /> Qualification Rules
           </button>
-          <button className="btn-accent" onClick={() => onNavigate?.('Pipeline')}>
-            View My Deals <ChevronRight size={16} />
+          <button
+            className="btn-accent"
+            onClick={() => onNavigate?.('Pipeline')}
+            style={{ padding: '6px 12px', fontSize: '12px' }}
+          >
+            Sales Pipeline <ChevronRight size={14} />
           </button>
         </div>
       </div>
 
-      {/* Top Client KPIs */}
-      <div className="kpi-grid">
-        <div className="kpi-card">
+      {/* Header */}
+      <div className="view-header">
+        <div className="view-title-group">
+          <h1>
+            Client Revenue Command Center
+            <span style={{ fontSize: '13px', background: 'var(--accent-bg)', color: 'var(--accent-deep)', padding: '3px 10px', borderRadius: '999px', fontWeight: 700 }}>
+              Live Ingestion Active
+            </span>
+          </h1>
+          <p>
+            Answering the 5 critical commercial questions in real-time, with automated leakage prevention.
+          </p>
+        </div>
+
+        <div className="view-actions">
+          <button className="btn-secondary" onClick={() => alert('Exporting monthly audit & revenue report (PDF/CSV)...')}>
+            <Download size={15} /> Export Revenue Report
+          </button>
+          <button className="btn-accent" onClick={() => onNavigate?.('Inbox')}>
+            <MessageSquare size={15} /> Live Conversations
+          </button>
+        </div>
+      </div>
+
+      {/* 5 Canonical Metrics + Revenue Leakage Alert Card */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px', marginBottom: '20px' }}>
+        {/* 1. Leads Came In */}
+        <div className="kpi-card" style={{ padding: '16px' }}>
           <div className="kpi-header">
-            <span className="kpi-label">Total Inbound Captured</span>
-            <div className="kpi-icon-wrap">
-              <Globe size={18} />
+            <span className="kpi-label" style={{ fontSize: '11.5px' }}>1. Inbound Leads</span>
+            <div className="kpi-icon-wrap" style={{ width: '32px', height: '32px' }}>
+              <Globe size={16} />
             </div>
           </div>
-          <div className="kpi-value">342</div>
-          <div className="kpi-footer">
-            <span className="kpi-delta up">+14.2%</span>
-            <span>from Meta, Google & Direct</span>
+          <div className="kpi-value" style={{ fontSize: '26px' }}>247</div>
+          <div className="kpi-footer" style={{ fontSize: '11px' }}>
+            <span className="kpi-delta up">+18%</span>
+            <span>Meta & Web forms</span>
           </div>
         </div>
 
-        <div className="kpi-card">
+        {/* 2. Contacted */}
+        <div className="kpi-card" style={{ padding: '16px' }}>
           <div className="kpi-header">
-            <span className="kpi-label">Sales-Ready Qualified</span>
-            <div className="kpi-icon-wrap" style={{ background: '#dcfce7', color: '#15803d' }}>
-              <UserCheck size={18} />
+            <span className="kpi-label" style={{ fontSize: '11.5px' }}>2. Contacted (&lt;45s)</span>
+            <div className="kpi-icon-wrap" style={{ width: '32px', height: '32px', background: '#dcfce7', color: '#15803d' }}>
+              <Zap size={16} />
             </div>
           </div>
-          <div className="kpi-value">224</div>
-          <div className="kpi-footer">
-            <span style={{ color: '#15803d', fontWeight: 700 }}>65.5% Qualification Rate</span>
+          <div className="kpi-value" style={{ fontSize: '26px' }}>238</div>
+          <div className="kpi-footer" style={{ fontSize: '11px' }}>
+            <span style={{ color: '#15803d', fontWeight: 700 }}>96.4% Contact Rate</span>
           </div>
         </div>
 
-        <div className="kpi-card">
+        {/* 3. Qualified */}
+        <div className="kpi-card" style={{ padding: '16px' }}>
           <div className="kpi-header">
-            <span className="kpi-label">Confirmed Appointments</span>
-            <div className="kpi-icon-wrap" style={{ background: '#dbeafe', color: '#1d4ed8' }}>
-              <Calendar size={18} />
+            <span className="kpi-label" style={{ fontSize: '11.5px' }}>3. Sales Qualified</span>
+            <div className="kpi-icon-wrap" style={{ width: '32px', height: '32px', background: '#e0f2fe', color: '#0369a1' }}>
+              <UserCheck size={16} />
             </div>
           </div>
-          <div className="kpi-value">86</div>
-          <div className="kpi-footer">
-            <span>88.2% show-up rate</span>
+          <div className="kpi-value" style={{ fontSize: '26px' }}>81</div>
+          <div className="kpi-footer" style={{ fontSize: '11px' }}>
+            <span>Score &gt; 75/100 threshold</span>
           </div>
         </div>
 
-        <div className="kpi-card dark-theme">
+        {/* 4. Appointments */}
+        <div className="kpi-card" style={{ padding: '16px' }}>
           <div className="kpi-header">
-            <span className="kpi-label">Generated Revenue</span>
-            <div className="kpi-icon-wrap">
-              <Sparkles size={18} />
+            <span className="kpi-label" style={{ fontSize: '11.5px' }}>4. Booked Demos</span>
+            <div className="kpi-icon-wrap" style={{ width: '32px', height: '32px', background: '#fef3c7', color: '#b45309' }}>
+              <Calendar size={16} />
             </div>
           </div>
-          <div className="kpi-value" style={{ color: 'var(--accent)' }}>₦16,200,000</div>
-          <div className="kpi-footer">
-            <span style={{ color: 'var(--accent)', fontWeight: 700 }}>34 Closed Deals</span>
+          <div className="kpi-value" style={{ fontSize: '26px' }}>34</div>
+          <div className="kpi-footer" style={{ fontSize: '11px' }}>
+            <span style={{ color: '#b45309', fontWeight: 700 }}>91.2% Show-up</span>
           </div>
         </div>
+
+        {/* 5. Closed Won Revenue */}
+        <div className="kpi-card dark-theme" style={{ padding: '16px' }}>
+          <div className="kpi-header">
+            <span className="kpi-label" style={{ fontSize: '11.5px', color: 'var(--accent)' }}>5. Closed Revenue</span>
+            <div className="kpi-icon-wrap" style={{ width: '32px', height: '32px' }}>
+              <Sparkles size={16} />
+            </div>
+          </div>
+          <div className="kpi-value" style={{ fontSize: '24px', color: 'var(--accent)' }}>₦18.4M</div>
+          <div className="kpi-footer" style={{ fontSize: '11px' }}>
+            <span style={{ color: '#fff', fontWeight: 700 }}>100% Attribution</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Revenue Leakage Radar Card (Section 10 & 34 of Operating Model) */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, #1e130c 0%, #2b1810 100%)',
+          border: '1px solid #ff7849',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          marginBottom: '24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          boxShadow: '0 4px 18px rgba(255, 120, 73, 0.15)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '8px',
+              background: 'rgba(255, 120, 73, 0.2)',
+              color: '#ff7849',
+              display: 'grid',
+              placeItems: 'center',
+            }}
+          >
+            <AlertTriangle size={22} />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '15px', fontWeight: 800, color: '#ffb199' }}>Revenue Leakage Radar</span>
+              <span style={{ fontSize: '11px', background: '#ff7849', color: '#fff', padding: '1px 7px', borderRadius: '4px', fontWeight: 800 }}>
+                ACTION NEEDED
+              </span>
+            </div>
+            <div style={{ fontSize: '13px', color: '#ffedd5', marginTop: '3px' }}>
+              <strong>₦6,200,000 Potential Revenue at Risk</strong> across 37 leads (stalled in discovery or missed demo confirmation).
+            </div>
+          </div>
+        </div>
+
+        <button
+          className="btn-accent"
+          onClick={handleTriggerRecovery}
+          disabled={recoveryTriggered}
+          style={{ background: '#ff7849', color: '#fff', border: 'none', padding: '8px 16px', fontSize: '12.5px', fontWeight: 700 }}
+        >
+          <RefreshCw size={14} className={recoveryTriggered ? 'animate-spin' : ''} />
+          {recoveryTriggered ? 'Dispatching Recovery AI...' : 'Trigger Automated Recovery Workflow'}
+        </button>
       </div>
 
       {/* Interactive Grid: Appointments & ROI Simulator */}

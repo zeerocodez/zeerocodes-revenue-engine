@@ -28,6 +28,7 @@ import {
 
 import OperationalDashboard from './features/dashboard/OperationalDashboard';
 import ClientDashboard from './features/dashboard/ClientDashboard';
+import OnboardingWizard from './features/onboarding/OnboardingWizard';
 import SalesPipelineWorkspace from './features/sales/SalesPipelineWorkspace';
 import ActivitiesWorkspace from './features/sales/ActivitiesWorkspace';
 import UnifiedInboxWorkspace from './features/inbox/UnifiedInboxWorkspace';
@@ -53,6 +54,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'Ops Hub', hash: 'operational', label: 'Executive Ops', icon: LayoutDashboard, badge: 'Live' },
   { id: 'Client Portal', hash: 'client-portal', label: 'Client Portal', icon: BarChart3 },
+  { id: 'Onboarding', hash: 'onboarding', label: 'Onboarding & Rules', icon: Sparkles, badge: 'Setup' },
   { id: 'Inbox', hash: 'inbox', label: 'Live Inbox', icon: MessageSquare, badge: 'AI' },
   { id: 'Pipeline', hash: 'pipeline', label: 'Deals & CRM', icon: Zap, badge: 'Sales' },
   { id: 'Follow-ups', hash: 'follow-ups', label: 'Cadences', icon: Repeat },
@@ -71,6 +73,7 @@ export default function App() {
     const hash = window.location.hash.replace('#', '').toLowerCase();
     if (hash === 'operational' || hash === 'overview') return 'Ops Hub';
     if (hash === 'client-portal' || hash === 'client') return 'Client Portal';
+    if (hash === 'onboarding' || hash === 'setup') return 'Onboarding';
     if (hash === 'inbox' || hash === 'messages') return 'Inbox';
     if (hash === 'pipeline' || hash === 'deals') return 'Pipeline';
     if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') return 'Follow-ups';
@@ -131,6 +134,7 @@ export default function App() {
       if (hash === 'landing' || hash === '') setActiveTab('Landing');
       else if (hash === 'operational' || hash === 'overview') setActiveTab('Ops Hub');
       else if (hash === 'client-portal' || hash === 'client') setActiveTab('Client Portal');
+      else if (hash === 'onboarding' || hash === 'setup') setActiveTab('Onboarding');
       else if (hash === 'inbox' || hash === 'messages') setActiveTab('Inbox');
       else if (hash === 'pipeline' || hash === 'deals') setActiveTab('Pipeline');
       else if (hash === 'follow-ups' || hash === 'cadence' || hash === 'automation') setActiveTab('Follow-ups');
@@ -253,6 +257,7 @@ export default function App() {
       <main style={{ flex: 1 }}>
         {activeTab === 'Ops Hub' && <OperationalDashboard session={session} onNavigate={navigateTo} />}
         {activeTab === 'Client Portal' && <ClientDashboard session={session} onNavigate={navigateTo} />}
+        {activeTab === 'Onboarding' && <OnboardingWizard session={session} onNavigate={navigateTo} />}
         {activeTab === 'Inbox' && <UnifiedInboxWorkspace session={session} />}
         {activeTab === 'Pipeline' && <SalesPipelineWorkspace session={session} />}
         {activeTab === 'Follow-ups' && <FollowUpCadenceWorkspace session={session} />}
