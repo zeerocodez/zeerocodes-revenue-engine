@@ -581,23 +581,30 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(17, 21, 18, 0.65);
-  backdrop-filter: blur(6px);
-  display: grid;
-  place-items: center;
-  z-index: 60;
-  padding: 20px;
+  background: rgba(17, 21, 18, 0.82);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 16px;
+  overflow-y: auto;
 }
 
 .modal-content {
   background: var(--white);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  max-width: 580px;
+  max-width: 640px;
   width: 100%;
+  max-height: min(92vh, 720px);
+  display: flex;
+  flex-direction: column;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
   animation: modalFadeIn 0.2s ease-out;
+  margin: auto;
+  flex-shrink: 0;
 }
 
 .modal-content.dark-modal {
@@ -607,11 +614,12 @@
 }
 
 .modal-header {
-  padding: 20px 24px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .modal-content.dark-modal .modal-header {
@@ -619,16 +627,39 @@
 }
 
 .modal-body {
-  padding: 24px;
+  padding: 14px 20px;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: rgba(199, 255, 85, 0.3);
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
 }
 
 .modal-footer {
-  padding: 16px 24px;
+  padding: 12px 20px;
   background: rgba(17, 21, 18, 0.02);
   border-top: 1px solid var(--line);
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 .modal-content.dark-modal .modal-footer {

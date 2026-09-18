@@ -23,6 +23,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { UserSession } from '../auth/AuthModal';
+import { getDaysRemaining } from '../auth/AuthModal';
 
 interface ClientDashboardProps {
   session: UserSession;
@@ -41,6 +42,8 @@ export default function ClientDashboard({ session, onNavigate }: ClientDashboard
   const softwareCost = 450000;
   const netProfit = projectedRevenue - softwareCost;
   const calculatedRoi = Math.round((netProfit / softwareCost) * 100);
+
+  const daysLeft = getDaysRemaining(session.subscriptionExpiresAt);
 
   const handleTriggerRecovery = () => {
     setRecoveryTriggered(true);
@@ -81,10 +84,25 @@ export default function ClientDashboard({ session, onNavigate }: ClientDashboard
             <ShieldCheck size={22} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '15px', fontWeight: 800 }}>Revenue Command Center: {session.tenantName}</span>
               <span className="role-badge superadmin" style={{ fontSize: '11px', background: 'var(--accent)', color: 'var(--ink)' }}>
                 OPERATING MODE: REVENUE ENGINE
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  background: daysLeft > 0 ? 'rgba(74, 222, 128, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  color: daysLeft > 0 ? '#4ade80' : '#f87171',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <Calendar size={11} /> {daysLeft > 0 ? `30-Day Pass: ${daysLeft} Days Left` : 'Subscription Expired'}
               </span>
             </div>
             <p style={{ fontSize: '12.5px', color: 'var(--dark-muted)', margin: '2px 0 0 0' }}>
@@ -96,10 +114,10 @@ export default function ClientDashboard({ session, onNavigate }: ClientDashboard
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
             className="btn-secondary"
-            onClick={() => onNavigate?.('Onboarding')}
+            onClick={() => onNavigate?.('Billing')}
             style={{ background: 'var(--dark-surface)', color: 'var(--accent)', borderColor: 'var(--dark-border)', padding: '6px 12px', fontSize: '12px' }}
           >
-            <Sliders size={14} /> Qualification Rules
+            <Calendar size={13} /> {session.subscriptionPlan}
           </button>
           <button
             className="btn-accent"

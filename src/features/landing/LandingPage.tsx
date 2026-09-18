@@ -7,6 +7,7 @@ import {
   Clock,
   FileSearch,
   HelpCircle,
+  Lock,
   Menu,
   Phone,
   Send,
@@ -18,12 +19,22 @@ import {
 } from 'lucide-react';
 import './landing.css';
 import { apiFetch, readJsonOrThrow } from '../../lib/api';
+import type { UserSession } from '../auth/AuthModal';
+import { getDaysRemaining } from '../auth/AuthModal';
 
 interface LandingPageProps {
+  session: UserSession | null;
+  onOpenSignIn: () => void;
+  onSignOut: () => void;
   onLaunchWorkspace: (tab?: string) => void;
 }
 
-export default function LandingPage({ onLaunchWorkspace }: LandingPageProps) {
+export default function LandingPage({
+  session,
+  onOpenSignIn,
+  onSignOut,
+  onLaunchWorkspace,
+}: LandingPageProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [auditBusy, setAuditBusy] = useState(false);
@@ -68,6 +79,8 @@ export default function LandingPage({ onLaunchWorkspace }: LandingPageProps) {
     setShowAuditModal(true);
   };
 
+  const daysLeft = session ? getDaysRemaining(session.subscriptionExpiresAt) : 0;
+
   return (
     <div className="landing-shell">
       {/* 1. Navigation */}
@@ -88,21 +101,88 @@ export default function LandingPage({ onLaunchWorkspace }: LandingPageProps) {
         </nav>
 
         <div className="nav-actions">
-          <button
-            type="button"
-            onClick={() => onLaunchWorkspace('Overview')}
-            className="text-link"
-            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-          >
-            Dashboard
-          </button>
-          <button
-            type="button"
-            onClick={openAudit}
-            className="button button-small"
-          >
-            BOOK REVENUE AUDIT <ArrowRight size={13} />
-          </button>
+          {session ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 10px',
+                  background: 'rgba(255,255,255,0.06)',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                }}
+              >
+                <span style={{ fontWeight: 700, color: '#fff' }}>{session.tenantName}</span>
+                <span
+                  style={{
+                    fontSize: '10.5px',
+                    padding: '1px 6px',
+                    borderRadius: '4px',
+                    background: daysLeft > 0 ? 'rgba(74, 222, 128, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                    color: daysLeft > 0 ? '#4ade80' : '#f87171',
+                    fontWeight: 700,
+                  }}
+                >
+                  {daysLeft > 0 ? `${daysLeft}d pass` : 'Expired'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onLaunchWorkspace('Client Portal')}
+                className="button button-small"
+                style={{ background: 'var(--accent)', color: 'var(--ink)' }}
+              >
+                Dashboard <ArrowRight size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={onSignOut}
+                className="text-link"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#f87171' }}
+              >
+                Sign Out
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={onOpenSignIn}
+                className="text-link"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+              >
+                Dashboard
+              </button>
+              <button
+                type="button"
+                onClick={onOpenSignIn}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  color: '#fff',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                <Lock size={12} color="var(--accent)" /> Client Sign In
+              </button>
+              <button
+                type="button"
+                onClick={openAudit}
+                className="button button-small"
+              >
+                BOOK REVENUE AUDIT <ArrowRight size={13} />
+              </button>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

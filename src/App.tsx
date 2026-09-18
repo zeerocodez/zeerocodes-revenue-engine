@@ -15,11 +15,14 @@ import {
   Inbox,
   LayoutDashboard,
   Lock,
+  LogOut,
   Menu,
   MessageSquare,
   Radio,
+  RefreshCw,
   Repeat,
   Shield,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   ToggleLeft,
@@ -47,7 +50,14 @@ import RevenueAttributionWorkspace from './features/revenue-engine/RevenueAttrib
 import SettingsWorkspace from './features/revenue-engine/SettingsWorkspace';
 import LeadSourcesWorkspace from './features/revenue-engine/LeadSourcesWorkspace';
 import LandingPage from './features/landing/LandingPage';
-import AuthModal, { type UserSession, PRESET_TENANTS, PRESET_USERS } from './features/auth/AuthModal';
+import AdminClientManagementWorkspace from './features/admin/AdminClientManagementWorkspace';
+import AuthModal, {
+  type UserSession,
+  INITIAL_CLIENT_ACCOUNTS,
+  getDaysRemaining,
+  create30DaysFromNow,
+} from './features/auth/AuthModal';
+import SubscriptionLockGate from './features/auth/SubscriptionLockGate';
 
 interface NavItem {
   id: string;
@@ -66,6 +76,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { id: 'Billing', hash: 'billing', label: '06 Billing & ROI', icon: CircleDollarSign, clientVisible: true },
 
   // Internal Zeerocodes Ops & Setter Tabs
+  { id: 'Admin Control', hash: 'admin-control', label: 'Admin Control', icon: Shield, badge: 'SuperAdmin', clientVisible: false },
   { id: 'Ops Hub', hash: 'operational', label: 'Executive Ops', icon: LayoutDashboard, badge: 'Live', clientVisible: false },
   { id: 'Qualify Logic', hash: 'qualify-logic', label: '08 Qualify Logic', icon: Sparkles, badge: 'AI Brain', clientVisible: false },
   { id: 'Inbox', hash: 'inbox', label: 'Live Inbox & Stream', icon: MessageSquare, badge: '45s', clientVisible: false },
@@ -79,33 +90,38 @@ const ALL_NAV_ITEMS: NavItem[] = [
 ];
 
 export default function App() {
-  const [session, setSession] = useState<UserSession>(() => {
+  const [session, setSession] = useState<UserSession | null>(() => {
     const saved = localStorage.getItem('zeero_user_session');
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch (e) {
-        // fallback
-      }
+      } catch (e) {}
     }
+    const initial = INITIAL_CLIENT_ACCOUNTS[0]; // zeerocodes@gmail.com Super Admin
     return {
-      userId: PRESET_USERS[0].id,
-      userName: PRESET_USERS[0].name,
-      userEmail: PRESET_USERS[0].email,
-      tenantId: PRESET_TENANTS[0].id,
-      tenantName: PRESET_TENANTS[0].name,
-      role: PRESET_USERS[0].defaultRole,
+      userId: initial.id,
+      userName: initial.name,
+      userEmail: initial.email,
+      tenantId: initial.tenantId,
+      tenantName: initial.tenantName,
+      role: initial.role,
       isSuperAdmin: true,
+      subscriptionPlan: initial.plan,
+      subscriptionStartDate: new Date().toISOString(),
+      subscriptionExpiresAt: initial.subscriptionExpiresAt,
+      subscriptionStatus: 'active',
     };
   });
 
   // View Mode: 'client' (isolated for external clients) or 'ops' (Zeerocodes agency & setters)
   const [viewMode, setViewMode] = useState<'client' | 'ops'>(() => {
-    return (session.role as string) === 'viewer' ? 'client' : 'ops';
+    if (!session) return 'client';
+    return session.tenantId === 'zeerocodes-hq' ? 'ops' : 'client';
   });
 
   const [activeTab, setActiveTab] = useState<string>(() => {
     const hash = window.location.hash.replace('#', '').toLowerCase();
+    if (hash === 'admin-control' || hash === 'admin' || hash === 'clients') return 'Admin Control';
     if (hash === 'client-portal' || hash === 'client') return 'Client Portal';
     if (hash === 'operational' || hash === 'overview') return 'Ops Hub';
     if (hash === 'qualify-logic' || hash === 'qualify' || hash === 'rules') return 'Qualify Logic';
@@ -124,16 +140,50 @@ export default function App() {
   });
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup' | 'switch'>('signin');
 
-  const handleUpdateSession = (newSession: UserSession) => {
+  const daysRemaining = session ? getDaysRemaining(session.subscriptionExpiresAt) : 0;
+  const isSubscriptionExpired = session ? daysRemaining <= 0 : false;
+
+  const handleUpdateSession = (newSession: UserSession | null) => {
+    if (newSession === null) {
+      setSession(null);
+      localStorage.removeItem('zeero_user_session');
+      navigateTo('Landing');
+      return;
+    }
+
     setSession(newSession);
     localStorage.setItem('zeero_user_session', JSON.stringify(newSession));
-    if ((newSession.role as string) === 'viewer') {
+    if (newSession.tenantId === 'zeerocodes-hq') {
+      setViewMode('ops');
+    } else {
       setViewMode('client');
-      setActiveTab('Client Portal');
-      window.location.hash = 'client-portal';
     }
+
+    if (activeTab === 'Landing') {
+      navigateTo('Client Portal');
+    }
+  };
+
+  const handleRenewSubscription = (daysToAdd = 30) => {
+    if (!session) return;
+    const newExpiry = create30DaysFromNow(daysToAdd);
+    const updated: UserSession = {
+      ...session,
+      subscriptionExpiresAt: newExpiry,
+      subscriptionStatus: 'active',
+    };
+    handleUpdateSession(updated);
+  };
+
+  const handleSignOut = () => {
+    handleUpdateSession(null);
+  };
+
+  const openSignInModal = (mode: 'signin' | 'signup' | 'switch' = 'signin') => {
+    setAuthModalMode(mode);
+    setIsAuthModalOpen(true);
   };
 
   const visibleNavItems = ALL_NAV_ITEMS.filter((item) => {
@@ -144,6 +194,12 @@ export default function App() {
   });
 
   const navigateTo = (tabName: string) => {
+    // Auth Guard: if attempting to visit dashboard without valid session, prompt sign in
+    if (tabName !== 'Landing' && !session) {
+      openSignInModal('signin');
+      return;
+    }
+
     setActiveTab(tabName);
     const item = ALL_NAV_ITEMS.find((n) => n.id === tabName);
     if (item) {
@@ -152,13 +208,13 @@ export default function App() {
       window.location.hash = 'landing';
     }
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-    setMobileMenuOpen(false);
   };
 
   useEffect(() => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
       if (hash === 'landing' || hash === '') setActiveTab('Landing');
+      else if (hash === 'admin-control' || hash === 'admin' || hash === 'clients') setActiveTab('Admin Control');
       else if (hash === 'client-portal' || hash === 'client') setActiveTab('Client Portal');
       else if (hash === 'operational' || hash === 'overview') setActiveTab('Ops Hub');
       else if (hash === 'qualify-logic' || hash === 'qualify' || hash === 'rules') setActiveTab('Qualify Logic');
@@ -178,42 +234,116 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
 
-  // Landing Page
+  // Landing Page View
   if (activeTab === 'Landing') {
     return (
       <div>
-        <div style={{ background: 'var(--ink)', color: '#fff', padding: '8px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', borderBottom: '1px solid var(--dark-border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="role-badge superadmin">Zeerocodes Revenue Engine</span>
-            <span>Organization: <strong>{session.tenantName}</strong> ({session.userName})</span>
+        {session && (
+          <div
+            style={{
+              background: 'var(--ink)',
+              color: '#fff',
+              padding: '8px 24px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              fontSize: '13px',
+              borderBottom: '1px solid var(--dark-border)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span className="role-badge superadmin">Zeerocodes Revenue Engine</span>
+              <span>
+                Signed in as: <strong>{session.tenantName}</strong> ({session.userName})
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  background: !isSubscriptionExpired ? 'rgba(74, 222, 128, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  color: !isSubscriptionExpired ? '#4ade80' : '#f87171',
+                }}
+              >
+                {!isSubscriptionExpired ? `🟢 30-Day Access: ${daysRemaining} Days Left` : '⚠️ Subscription Expired'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button
+                onClick={() => openSignInModal('switch')}
+                style={{ background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
+              >
+                Switch Account
+              </button>
+              <button
+                onClick={() => navigateTo('Client Portal')}
+                className="btn-accent"
+                style={{ padding: '4px 12px', fontSize: '12px' }}
+              >
+                Open Dashboard <ArrowRight size={14} />
+              </button>
+              <button
+                onClick={handleSignOut}
+                style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              style={{ background: 'transparent', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '12px', fontWeight: 700 }}
-            >
-              Switch Workspace
-            </button>
-            <button
-              onClick={() => navigateTo('Client Portal')}
-              className="btn-accent"
-              style={{ padding: '4px 12px', fontSize: '12px' }}
-            >
-              Launch Engine <ArrowRight size={14} />
-            </button>
-          </div>
-        </div>
+        )}
 
-        <LandingPage onLaunchWorkspace={(tab) => {
-          if (tab === 'leads') navigateTo('Leads');
-          else if (tab === 'sdr') navigateTo('Inbox');
-          else if (tab === 'revenue') navigateTo('Revenue');
-          else navigateTo('Client Portal');
-        }} />
+        <LandingPage
+          session={session}
+          onOpenSignIn={() => openSignInModal('signin')}
+          onSignOut={handleSignOut}
+          onLaunchWorkspace={(tab) => {
+            if (!session) {
+              openSignInModal('signin');
+              return;
+            }
+            if (tab === 'leads') navigateTo('Leads');
+            else if (tab === 'sdr') navigateTo('Inbox');
+            else if (tab === 'revenue') navigateTo('Revenue');
+            else navigateTo('Client Portal');
+          }}
+        />
 
         <AuthModal
           session={session}
           isOpen={isAuthModalOpen}
+          initialMode={authModalMode}
+          onClose={() => setIsAuthModalOpen(false)}
+          onUpdateSession={handleUpdateSession}
+        />
+      </div>
+    );
+  }
+
+  // Unauthenticated Guard Screen if user directly lands on a hash URL
+  if (!session) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--ink)', display: 'grid', placeItems: 'center', padding: '20px' }}>
+        <div style={{ maxWidth: '440px', width: '100%', background: 'var(--dark-card)', border: '1px solid var(--dark-border)', borderRadius: '14px', padding: '32px', textAlign: 'center' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--accent)', color: 'var(--ink)', display: 'grid', placeItems: 'center', margin: '0 auto 16px auto' }}>
+            <Lock size={24} />
+          </div>
+          <h2 style={{ color: '#fff', fontSize: '20px', fontWeight: 800, margin: '0 0 8px 0' }}>Client Sign In Required</h2>
+          <p style={{ color: 'var(--dark-text)', fontSize: '13px', margin: '0 0 20px 0', lineHeight: 1.5 }}>
+            This business dashboard is restricted to authorized clients with active 30-day subscriptions.
+          </p>
+          <button onClick={() => openSignInModal('signin')} className="btn-accent" style={{ width: '100%', padding: '10px 16px', fontWeight: 700 }}>
+            Sign In with Business Credentials <ArrowRight size={15} />
+          </button>
+          <button onClick={() => navigateTo('Landing')} className="btn-secondary" style={{ width: '100%', marginTop: '10px', padding: '9px 16px' }}>
+            Back to Home
+          </button>
+        </div>
+
+        <AuthModal
+          session={session}
+          isOpen={isAuthModalOpen}
+          initialMode={authModalMode}
           onClose={() => setIsAuthModalOpen(false)}
           onUpdateSession={handleUpdateSession}
         />
@@ -232,6 +362,30 @@ export default function App() {
               <div style={{ fontSize: '14px', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1.1 }}>ZEEROCODES</div>
               <div style={{ fontSize: '10px', color: 'var(--muted)', fontWeight: 600 }}>REVENUE ENGINE</div>
             </div>
+          </div>
+
+          {/* 30-Day Subscription Access Status Badge */}
+          <div
+            onClick={() => openSignInModal('switch')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 10px',
+              borderRadius: '8px',
+              background: !isSubscriptionExpired ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.15)',
+              border: !isSubscriptionExpired ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.4)',
+              cursor: 'pointer',
+            }}
+            title="Click to manage 30-day subscription"
+          >
+            <Calendar size={13} color={!isSubscriptionExpired ? '#10b981' : '#f87171'} />
+            <span style={{ fontSize: '11px', fontWeight: 700, color: !isSubscriptionExpired ? '#10b981' : '#f87171' }}>
+              {!isSubscriptionExpired ? `30d Access: ${daysRemaining} Days Left` : '⚠️ Subscription Expired'}
+            </span>
+            <span style={{ fontSize: '9.5px', background: 'rgba(0,0,0,0.1)', padding: '1px 4px', borderRadius: '3px', color: 'var(--muted)' }}>
+              Renew
+            </span>
           </div>
 
           {/* Role / View Mode Switcher Pill */}
@@ -317,7 +471,7 @@ export default function App() {
 
         <div className="top-nav-right">
           {/* Tenant & User Switcher Trigger */}
-          <div className="tenant-selector" onClick={() => setIsAuthModalOpen(true)}>
+          <div className="tenant-selector" onClick={() => openSignInModal('switch')} title="Click to switch client organization or renew 30-day access">
             <Building2 size={15} color="var(--accent-deep)" />
             <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: 1.2 }}>
               <span style={{ fontSize: '12px', fontWeight: 700 }}>{session.tenantName}</span>
@@ -335,31 +489,84 @@ export default function App() {
           >
             Landing
           </button>
+
+          <button
+            onClick={handleSignOut}
+            title="Sign Out"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '7px 10px',
+              background: 'transparent',
+              border: '1px solid var(--line)',
+              borderRadius: '6px',
+              color: 'var(--muted)',
+              fontSize: '11.5px',
+              cursor: 'pointer',
+            }}
+          >
+            <LogOut size={13} />
+          </button>
         </div>
       </header>
 
-      {/* Main View Router */}
+      {/* Main View Router & Subscription Expiration Gate */}
       <main style={{ flex: 1 }}>
-        {activeTab === 'Client Portal' && <ClientDashboard session={session} onNavigate={navigateTo} />}
-        {activeTab === 'Ops Hub' && <OperationalDashboard session={session} onNavigate={navigateTo} />}
-        {activeTab === 'Qualify Logic' && <QualifyLogicWorkspace session={session} onNavigate={navigateTo} />}
-        {activeTab === 'Follow-ups' && <FollowUpCadenceWorkspace session={session} />}
-        {activeTab === 'Leads' && <LeadWorkspace session={session} />}
-        {activeTab === 'Revenue' && <RevenueAttributionWorkspace session={session} />}
-        {activeTab === 'Billing' && <BillingWorkspace session={session} />}
-        {activeTab === 'Onboarding' && <OnboardingWizard session={session} onNavigate={navigateTo} />}
-        {activeTab === 'Inbox' && <UnifiedInboxWorkspace session={session} />}
-        {activeTab === 'Pipeline' && <SalesPipelineWorkspace session={session} />}
-        {activeTab === 'Lead Sources' && <LeadSourcesWorkspace session={session} />}
-        {activeTab === 'Integrations' && <IntegrationsHubWorkspace session={session} />}
-        {activeTab === 'Templates' && <TemplatesWorkspace session={session} />}
-        {activeTab === 'Settings' && <SettingsWorkspace />}
+        {isSubscriptionExpired ? (
+          <SubscriptionLockGate
+            session={session}
+            onRenew={handleRenewSubscription}
+            onSwitchAccount={() => openSignInModal('switch')}
+            onSignOut={handleSignOut}
+            onBackToLanding={() => navigateTo('Landing')}
+          />
+        ) : (
+          <>
+            {activeTab === 'Admin Control' && (
+              <AdminClientManagementWorkspace
+                session={session}
+                onSwitchToClient={(acc) => {
+                  handleUpdateSession({
+                    userId: acc.id,
+                    userName: acc.name,
+                    userEmail: acc.email,
+                    tenantId: acc.tenantId,
+                    tenantName: acc.tenantName,
+                    role: acc.role,
+                    isSuperAdmin: acc.tenantId === 'zeerocodes-hq',
+                    subscriptionPlan: acc.plan,
+                    subscriptionStartDate: new Date().toISOString(),
+                    subscriptionExpiresAt: acc.subscriptionExpiresAt,
+                    subscriptionStatus: 'active',
+                  });
+                  navigateTo('Client Portal');
+                }}
+              />
+            )}
+            {activeTab === 'Client Portal' && <ClientDashboard session={session} onNavigate={navigateTo} />}
+            {activeTab === 'Ops Hub' && <OperationalDashboard session={session} onNavigate={navigateTo} />}
+            {activeTab === 'Qualify Logic' && <QualifyLogicWorkspace session={session} onNavigate={navigateTo} />}
+            {activeTab === 'Follow-ups' && <FollowUpCadenceWorkspace session={session} />}
+            {activeTab === 'Leads' && <LeadWorkspace session={session} />}
+            {activeTab === 'Revenue' && <RevenueAttributionWorkspace session={session} />}
+            {activeTab === 'Billing' && <BillingWorkspace session={session} />}
+            {activeTab === 'Onboarding' && <OnboardingWizard session={session} onNavigate={navigateTo} />}
+            {activeTab === 'Inbox' && <UnifiedInboxWorkspace session={session} />}
+            {activeTab === 'Pipeline' && <SalesPipelineWorkspace session={session} />}
+            {activeTab === 'Lead Sources' && <LeadSourcesWorkspace session={session} />}
+            {activeTab === 'Integrations' && <IntegrationsHubWorkspace session={session} />}
+            {activeTab === 'Templates' && <TemplatesWorkspace session={session} />}
+            {activeTab === 'Settings' && <SettingsWorkspace />}
+          </>
+        )}
       </main>
 
       {/* Auth & Tenant Switcher Modal */}
       <AuthModal
         session={session}
         isOpen={isAuthModalOpen}
+        initialMode={authModalMode}
         onClose={() => setIsAuthModalOpen(false)}
         onUpdateSession={handleUpdateSession}
       />

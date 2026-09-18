@@ -19,6 +19,7 @@ import {
   Layers,
   MessageSquare,
   Play,
+  Plus,
   Radio,
   RefreshCw,
   Rocket,
@@ -26,8 +27,11 @@ import {
   ShieldCheck,
   Sliders,
   Sparkles,
+  Trash2,
   Upload,
   UserCheck,
+  UserPlus,
+  Users,
   Zap,
 } from 'lucide-react';
 import type { UserSession } from '../auth/AuthModal';
@@ -45,11 +49,11 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
 
   // Step 1: Business Profile State
   const [businessProfile, setBusinessProfile] = useState({
-    businessName: session.tenantName || 'ABC Commercial Services',
-    industry: 'Facility Management & Cleaning',
-    website: 'https://abccleaning.ng',
-    primaryService: 'Commercial & Post-Construction Office Cleaning',
-    locations: 'Lagos (Victoria Island, Lekki, Ikoyi, Ikeja)',
+    businessName: session.tenantName || 'Apex Professional Services',
+    industry: 'Professional Services & Consulting',
+    website: 'https://apexpro.com',
+    primaryService: 'Tax Optimization & Financial Strategy Advisory',
+    locations: 'Nationwide / Remote & In-Person',
     avgDealValue: 1800000,
     salesCycleDays: 7,
   });
@@ -61,11 +65,34 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
     minBudget: 500000,
     requireDecisionMaker: true,
     requireLocationFit: true,
-    allowedLocations: 'Lagos, Abuja, Port Harcourt',
+    allowedLocations: 'Nationwide / All Metros',
     requireTimeline: true,
     maxTimelineDays: 30,
     autoBookAppointments: true,
   });
+
+  // Step 3: Team Roster, Closers & Setters State
+  const [closers, setClosers] = useState<{ id: string; name: string; email: string; calendarUrl: string; commissionPct: number; specialty: string }[]>([
+    { id: 'c1', name: 'Michael Scott', email: 'michael.closer@client.com', calendarUrl: 'https://meet.google.com/apex-discovery', commissionPct: 10, specialty: 'Enterprise Retainers & Contracts' },
+    { id: 'c2', name: 'Folake Adeleke', email: 'folake.deals@client.com', calendarUrl: 'https://cal.com/folake-deals/30min', commissionPct: 12, specialty: 'Corporate Law & Tax Advisory' }
+  ]);
+  const [setters, setSetters] = useState<{ id: string; name: string; email: string; dailyQuota: number }[]>([
+    { id: 's1', name: 'Sarah Jenkins', email: 'sarah.setter@client.com', dailyQuota: 30 },
+    { id: 's2', name: 'Alex Rivera', email: 'alex.setter@client.com', dailyQuota: 30 }
+  ]);
+
+  // Form inputs for adding closer/setter
+  const [newCloserName, setNewCloserName] = useState('');
+  const [newCloserEmail, setNewCloserEmail] = useState('');
+  const [newCloserCal, setNewCloserCal] = useState('');
+  const [newCloserCommission, setNewCloserCommission] = useState(10);
+  const [newCloserSpecialty, setNewCloserSpecialty] = useState('High-Ticket Strategy');
+
+  const [newSetterName, setNewSetterName] = useState('');
+  const [newSetterEmail, setNewSetterEmail] = useState('');
+  const [newSetterQuota, setNewSetterQuota] = useState(35);
+
+  const [teamSaveSuccess, setTeamSaveSuccess] = useState(false);
 
   // Step 4: Test Lead Simulation State
   const [testLeadStatus, setTestLeadStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
@@ -170,9 +197,10 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
   const steps = [
     { num: 1, title: 'Business Profile', desc: 'Core offer & services' },
     { num: 2, title: 'Qualification Policy', desc: 'Define sales-ready leads' },
-    { num: 3, title: 'Connect Lead Sources', desc: 'Integration notes & webhooks' },
-    { num: 4, title: 'Test Lead Verification', desc: 'End-to-end simulation' },
-    { num: 5, title: 'Live Revenue Engine', desc: 'Deployment ready' },
+    { num: 3, title: 'Team & Closers Setup', desc: 'Setters, Closers & Calendars' },
+    { num: 4, title: 'Connect Lead Sources', desc: 'Integration notes & webhooks' },
+    { num: 5, title: 'Test Lead Verification', desc: 'End-to-end simulation' },
+    { num: 6, title: 'Live Revenue Engine', desc: 'Deployment ready' },
   ];
 
   const webhookUrl = `${window.location.origin}/api/public/lead-intake?tenant=${session.tenantId}`;
@@ -505,19 +533,265 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
               Back
             </button>
             <button className="btn-accent" onClick={() => setCurrentStep(3)}>
-              Proceed to Lead Sources <ArrowRight size={15} />
+              Proceed to Team & Closers Setup <ArrowRight size={15} />
             </button>
           </div>
         </div>
       )}
 
-      {/* STEP 3: CONNECT LEAD SOURCES WITH STEP-BY-STEP INTEGRATION NOTES */}
+      {/* STEP 3: TEAM, CLOSERS & SETTERS SETUP */}
       {currentStep === 3 && (
+        <div className="table-card" style={{ padding: '20px', maxWidth: '880px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <Users size={20} color="var(--accent-deep)" />
+            <div>
+              <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>Step 3: Closers, Setters & Team Setup</h2>
+              <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '2px 0 0 0' }}>
+                Configure your sales closers and calendar links. The AI engine books pre-qualified appointments directly onto their calendars.
+              </p>
+            </div>
+          </div>
+
+          {teamSaveSuccess && (
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(74, 222, 128, 0.15)', border: '1px solid rgba(74, 222, 128, 0.4)', color: '#16a34a', fontSize: '12.5px', fontWeight: 700, marginBottom: '16px' }}>
+              ✓ Team roster and closer calendar links saved to your organization!
+            </div>
+          )}
+
+          {/* 1. CLOSERS ROSTER */}
+          <div style={{ marginBottom: '22px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div>
+                <span style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--ink)' }}>
+                  🎯 Active Closers ({closers.length})
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: '8px' }}>
+                  Takes high-intent discovery calls & demo bookings
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+              {closers.map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    background: 'var(--paper)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--line)',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 700 }}>{c.name}</span>
+                      <span className="role-badge closer" style={{ fontSize: '9.5px', padding: '1px 6px' }}>Closer</span>
+                      <span style={{ fontSize: '11px', color: 'var(--accent-deep)', fontWeight: 600 }}>{c.commissionPct}% Comm.</span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
+                      {c.email} • <em>{c.specialty}</em> • <code style={{ fontSize: '10.5px' }}>{c.calendarUrl}</code>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setClosers(closers.filter((item) => item.id !== c.id))}
+                    style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px' }}
+                    title="Remove closer"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Add New Closer Form */}
+            <div style={{ padding: '12px', background: 'var(--white)', borderRadius: '8px', border: '1px dashed var(--line)' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '8px', color: 'var(--ink)' }}>
+                + Add New Closer Seat:
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr auto', gap: '8px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="Closer Full Name"
+                  value={newCloserName}
+                  onChange={(e) => setNewCloserName(e.target.value)}
+                  style={{ padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px' }}
+                />
+                <input
+                  type="email"
+                  placeholder="closer@company.com"
+                  value={newCloserEmail}
+                  onChange={(e) => setNewCloserEmail(e.target.value)}
+                  style={{ padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px' }}
+                />
+                <input
+                  type="url"
+                  placeholder="Calendar URL (Cal.com / Google Meet / Calendly)"
+                  value={newCloserCal}
+                  onChange={(e) => setNewCloserCal(e.target.value)}
+                  style={{ padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newCloserName.trim() || !newCloserEmail.trim()) return;
+                    setClosers([
+                      ...closers,
+                      {
+                        id: `c_${Date.now()}`,
+                        name: newCloserName.trim(),
+                        email: newCloserEmail.trim(),
+                        calendarUrl: newCloserCal.trim() || 'https://meet.google.com/client-demo',
+                        commissionPct: newCloserCommission,
+                        specialty: newCloserSpecialty,
+                      },
+                    ]);
+                    setNewCloserName('');
+                    setNewCloserEmail('');
+                    setNewCloserCal('');
+                  }}
+                  className="btn-accent"
+                  style={{ padding: '7px 12px', fontSize: '12px' }}
+                >
+                  <Plus size={13} /> Add Closer
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. SETTERS ROSTER */}
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <div>
+                <span style={{ fontSize: '13.5px', fontWeight: 800, color: 'var(--ink)' }}>
+                  ⚡ Outbound / Inbound Setters & SDRs ({setters.length})
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: '8px' }}>
+                  Handles qualification questions and custom inquiries
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+              {setters.map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    background: 'var(--paper)',
+                    borderRadius: '8px',
+                    border: '1px solid var(--line)',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 700 }}>{s.name}</span>
+                      <span className="role-badge agent" style={{ fontSize: '9.5px', padding: '1px 6px' }}>Setter</span>
+                      <span style={{ fontSize: '11px', color: 'var(--muted)' }}>Quota: {s.dailyQuota} leads/day</span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>
+                      {s.email}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setSetters(setters.filter((item) => item.id !== s.id))}
+                    style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: '4px' }}
+                    title="Remove setter"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Add New Setter Form */}
+            <div style={{ padding: '12px', background: 'var(--white)', borderRadius: '8px', border: '1px dashed var(--line)' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '8px', color: 'var(--ink)' }}>
+                + Add New Setter Seat:
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="Setter Full Name"
+                  value={newSetterName}
+                  onChange={(e) => setNewSetterName(e.target.value)}
+                  style={{ padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px' }}
+                />
+                <input
+                  type="email"
+                  placeholder="setter@company.com"
+                  value={newSetterEmail}
+                  onChange={(e) => setNewSetterEmail(e.target.value)}
+                  style={{ padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px' }}
+                />
+                <input
+                  type="number"
+                  placeholder="Daily Quota (30)"
+                  value={newSetterQuota}
+                  onChange={(e) => setNewSetterQuota(Number(e.target.value))}
+                  style={{ padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newSetterName.trim() || !newSetterEmail.trim()) return;
+                    setSetters([
+                      ...setters,
+                      {
+                        id: `s_${Date.now()}`,
+                        name: newSetterName.trim(),
+                        email: newSetterEmail.trim(),
+                        dailyQuota: newSetterQuota || 30,
+                      },
+                    ]);
+                    setNewSetterName('');
+                    setNewSetterEmail('');
+                  }}
+                  className="btn-accent"
+                  style={{ padding: '7px 12px', fontSize: '12px' }}
+                >
+                  <Plus size={13} /> Add Setter
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', borderTop: '1px solid var(--line)' }}>
+            <button className="btn-secondary" onClick={() => setCurrentStep(2)}>
+              Back
+            </button>
+            <button
+              className="btn-accent"
+              onClick={() => {
+                setTeamSaveSuccess(true);
+                setTimeout(() => {
+                  setTeamSaveSuccess(false);
+                  setCurrentStep(4);
+                }, 600);
+              }}
+            >
+              Save Team & Connect Lead Sources <ArrowRight size={15} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 4: CONNECT LEAD SOURCES WITH STEP-BY-STEP INTEGRATION NOTES */}
+      {currentStep === 4 && (
         <div className="table-card" style={{ padding: '20px', maxWidth: '880px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
             <Radio size={20} color="var(--accent-deep)" />
             <div>
-              <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>Step 3: Connect Your Lead Sources (Quick Setup Guides)</h2>
+              <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>Step 4: Connect Your Lead Sources (Quick Setup Guides)</h2>
               <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '2px 0 0 0' }}>
                 Follow these short setup notes to pipe leads from Meta, your Website, WhatsApp, GoHighLevel, or CSV files directly into Zeerocodes.
               </p>
@@ -735,23 +1009,23 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', borderTop: '1px solid var(--line)' }}>
-            <button className="btn-secondary" onClick={() => setCurrentStep(2)}>
+            <button className="btn-secondary" onClick={() => setCurrentStep(3)}>
               Back
             </button>
-            <button className="btn-accent" onClick={() => setCurrentStep(4)}>
+            <button className="btn-accent" onClick={() => setCurrentStep(5)}>
               Run Test Lead Verification <ArrowRight size={15} />
             </button>
           </div>
         </div>
       )}
 
-      {/* STEP 4: BULLETPROOF TEST LEAD SIMULATION */}
-      {currentStep === 4 && (
+      {/* STEP 5: BULLETPROOF TEST LEAD SIMULATION */}
+      {currentStep === 5 && (
         <div className="table-card" style={{ padding: '20px', maxWidth: '850px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
             <Play size={20} color="var(--accent-deep)" />
             <div>
-              <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>Step 4: End-to-End Test Lead Verification</h2>
+              <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>Step 5: End-to-End Test Lead Verification</h2>
               <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '2px 0 0 0' }}>
                 Simulate an actual lead arriving right now. Watch the engine execute ingestion, scoring, AI response, and CRM deal creation in real-time.
               </p>
@@ -833,12 +1107,12 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', borderTop: '1px solid var(--line)' }}>
-            <button className="btn-secondary" onClick={() => setCurrentStep(3)}>
+            <button className="btn-secondary" onClick={() => setCurrentStep(4)}>
               Back
             </button>
             <button
               className="btn-accent"
-              onClick={() => setCurrentStep(5)}
+              onClick={() => setCurrentStep(6)}
               disabled={testLeadStatus !== 'success'}
               style={{ padding: '8px 16px' }}
             >
@@ -848,8 +1122,8 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
         </div>
       )}
 
-      {/* STEP 5: DEPLOYMENT READY & GO LIVE */}
-      {currentStep === 5 && (
+      {/* STEP 6: DEPLOYMENT READY & GO LIVE */}
+      {currentStep === 6 && (
         <div className="table-card" style={{ padding: '28px', maxWidth: '850px', textAlign: 'center' }}>
           <div
             style={{
@@ -870,7 +1144,7 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
             Zeerocodes Revenue Engine is Live & Synchronized!
           </h2>
           <p style={{ fontSize: '13px', color: 'var(--muted)', maxWidth: '500px', margin: '0 auto 20px auto', lineHeight: 1.5 }}>
-            Your lead channels are active. Inbound prospects will now be engaged in under 45 seconds, qualified against your custom rules, and booked directly to your team's calendar.
+            Your lead channels and closer team are active. Inbound prospects will now be engaged in under 45 seconds, qualified against your custom rules, and booked directly to your closers' calendar.
           </p>
 
           <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '10px' }}>
