@@ -323,9 +323,10 @@ export default function AuthModal({
         className="modal-content dark-modal"
         style={{
           maxWidth: '560px',
-          maxHeight: '90vh',
+          maxHeight: 'calc(100vh - 40px)',
           display: 'flex',
           flexDirection: 'column',
+          overflow: 'hidden',
           boxShadow: '0 25px 60px -15px rgba(0,0,0,0.7), 0 0 0 1px rgba(199, 255, 85, 0.15)',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -430,7 +431,7 @@ export default function AuthModal({
 
         {/* 1. SIGN IN MODE */}
         {activeMode === 'signin' && (
-          <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '18px 22px' }}>
               {loginError && (
                 <div
@@ -552,7 +553,7 @@ export default function AuthModal({
 
         {/* 2. SIGN UP AS NEW CLIENT */}
         {activeMode === 'signup' && (
-          <form onSubmit={handleClientSignUp} style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <form onSubmit={handleClientSignUp} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '18px 22px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--dark-text)', marginBottom: '4px' }}>
@@ -652,7 +653,7 @@ export default function AuthModal({
 
         {/* 3. SWITCH / MANAGE DEMO ACCOUNTS & RENEWAL */}
         {activeMode === 'switch' && (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '18px 22px' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: 'var(--dark-text)' }}>
                 <Building2 size={14} color="var(--accent)" /> All Registered Client Accounts (30-Day Status)

@@ -399,7 +399,7 @@ export default function AdminClientManagementWorkspace({
         <div className="modal-overlay" onClick={() => setIsCreateModalOpen(false)}>
           <div
             className="modal-content dark-modal"
-            style={{ maxWidth: '580px', boxShadow: '0 25px 60px -15px rgba(0,0,0,0.8)' }}
+            style={{ maxWidth: '580px', maxHeight: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 60px -15px rgba(0,0,0,0.8)' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-header" style={{ padding: '16px 22px' }}>
@@ -424,7 +424,7 @@ export default function AdminClientManagementWorkspace({
               </button>
             </div>
 
-            <form onSubmit={handleCreateClient}>
+            <form onSubmit={handleCreateClient} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px', padding: '18px 22px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--dark-text)', marginBottom: '5px' }}>
