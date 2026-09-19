@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   AlertCircle,
   ArrowRight,
@@ -12,6 +12,7 @@ import {
   Code2,
   Copy,
   Database,
+  Edit3,
   ExternalLink,
   Flame,
   Globe,
@@ -32,9 +33,18 @@ import {
   UserCheck,
   UserPlus,
   Users,
+  X,
   Zap,
 } from 'lucide-react';
 import type { UserSession } from '../auth/AuthModal';
+import {
+  type QualificationCriterion,
+  type QualificationPolicyConfig,
+  getTenantQualificationPolicy,
+  saveTenantQualificationPolicy,
+  INDUSTRY_CRITERIA_PRESETS,
+  DEFAULT_QUALIFICATION_CRITERIA,
+} from '../../domain/qualification-criteria';
 
 interface OnboardingWizardProps {
   session: UserSession;
@@ -47,6 +57,8 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedGuide, setExpandedGuide] = useState<string | null>('meta');
 
+  const tenantId = session.tenantId || 'new-business-tenant';
+
   // Step 1: Business Profile State
   const [businessProfile, setBusinessProfile] = useState({
     businessName: session.tenantName || 'Apex Professional Services',
@@ -58,18 +70,121 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
     salesCycleDays: 7,
   });
 
-  // Step 2: Qualification Policy State
-  const [qualificationPolicy, setQualificationPolicy] = useState({
-    minScore: 75,
-    requireBudget: true,
-    minBudget: 500000,
-    requireDecisionMaker: true,
-    requireLocationFit: true,
-    allowedLocations: 'Nationwide / All Metros',
-    requireTimeline: true,
-    maxTimelineDays: 30,
-    autoBookAppointments: true,
+  // Step 2: Customizable Qualification Policy State
+  const [policyConfig, setPolicyConfig] = useState<QualificationPolicyConfig>(() =>
+    getTenantQualificationPolicy(tenantId)
+  );
+  const [criteria, setCriteria] = useState<QualificationCriterion[]>(() => policyConfig.criteria);
+  const [minScore, setMinScore] = useState<number>(() => policyConfig.minScore || 75);
+  const [autoBookAppointments, setAutoBookAppointments] = useState<boolean>(() => policyConfig.autoBookAppointments ?? true);
+  const [selectedIndustryPreset, setSelectedIndustryPreset] = useState<string>(() => policyConfig.selectedIndustryPreset || 'consulting');
+
+  // Criteria Add/Edit Modal State
+  const [editingCriterion, setEditingCriterion] = useState<QualificationCriterion | null>(null);
+  const [isAddingCriterion, setIsAddingCriterion] = useState<boolean>(false);
+  const [critForm, setCritForm] = useState({
+    name: '',
+    description: '',
+    qualifyingQuestion: '',
+    weight: 20,
+    category: 'custom' as QualificationCriterion['category'],
+    thresholdValue: '',
   });
+
+  // Auto-save policy changes
+  useEffect(() => {
+    const updatedPolicy: QualificationPolicyConfig = {
+      minScore,
+      criteria,
+      autoBookAppointments,
+      selectedIndustryPreset,
+    };
+    setPolicyConfig(updatedPolicy);
+    saveTenantQualificationPolicy(tenantId, updatedPolicy);
+  }, [minScore, criteria, autoBookAppointments, selectedIndustryPreset, tenantId]);
+
+  const handleToggleCriterion = (id: string) => {
+    setCriteria((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c))
+    );
+  };
+
+  const handleDeleteCriterion = (id: string) => {
+    setCriteria((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const handleOpenEditCriterion = (criterion: QualificationCriterion) => {
+    setEditingCriterion(criterion);
+    setCritForm({
+      name: criterion.name,
+      description: criterion.description,
+      qualifyingQuestion: criterion.qualifyingQuestion,
+      weight: criterion.weight,
+      category: criterion.category,
+      thresholdValue: String(criterion.thresholdValue || ''),
+    });
+  };
+
+  const handleOpenAddCriterion = () => {
+    setIsAddingCriterion(true);
+    setCritForm({
+      name: '',
+      description: '',
+      qualifyingQuestion: '',
+      weight: 20,
+      category: 'custom',
+      thresholdValue: '',
+    });
+  };
+
+  const handleSaveCriterionForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!critForm.name.trim()) return;
+
+    if (editingCriterion) {
+      // Edit existing
+      setCriteria((prev) =>
+        prev.map((c) =>
+          c.id === editingCriterion.id
+            ? {
+                ...c,
+                name: critForm.name,
+                description: critForm.description,
+                qualifyingQuestion: critForm.qualifyingQuestion,
+                weight: Number(critForm.weight || 20),
+                category: critForm.category,
+                thresholdValue: critForm.thresholdValue,
+              }
+            : c
+        )
+      );
+      setEditingCriterion(null);
+    } else {
+      // Add new
+      const newCrit: QualificationCriterion = {
+        id: `crit_custom_${Date.now()}`,
+        name: critForm.name,
+        description: critForm.description || critForm.name,
+        enabled: true,
+        weight: Number(critForm.weight || 20),
+        category: critForm.category,
+        thresholdValue: critForm.thresholdValue || 'Custom Requirement',
+        qualifyingQuestion: critForm.qualifyingQuestion || `Can you confirm details regarding ${critForm.name}?`,
+      };
+      setCriteria((prev) => [...prev, newCrit]);
+      setIsAddingCriterion(false);
+    }
+  };
+
+  const handleApplyPreset = (presetKey: string) => {
+    setSelectedIndustryPreset(presetKey);
+    const preset = INDUSTRY_CRITERIA_PRESETS[presetKey];
+    if (preset) {
+      setCriteria(preset.criteria);
+    } else if (presetKey === 'default') {
+      setCriteria(DEFAULT_QUALIFICATION_CRITERIA);
+    }
+  };
 
   // Step 3: Team Roster, Closers & Setters State
   const [closers, setClosers] = useState<{ id: string; name: string; email: string; calendarUrl: string; commissionPct: number; specialty: string }[]>([
@@ -392,26 +507,74 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
         </div>
       )}
 
-      {/* STEP 2: QUALIFICATION RULES */}
+      {/* STEP 2: CUSTOMIZABLE QUALIFICATION POLICY */}
       {currentStep === 2 && (
-        <div className="table-card" style={{ padding: '20px', maxWidth: '850px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-            <Sliders size={20} color="var(--accent-deep)" />
-            <div>
-              <h2 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>Step 2: Define Qualified Lead Criteria</h2>
-              <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '2px 0 0 0' }}>
-                Answer: <em>"What makes a lead worth my salesperson's time?"</em> AI will strictly enforce this policy.
-              </p>
+        <div className="table-card" style={{ padding: '22px', maxWidth: '880px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Sliders size={22} color="var(--accent-deep)" />
+              <div>
+                <h2 style={{ fontSize: '17px', fontWeight: 800, margin: 0 }}>Step 2: Customize Lead Qualification Criteria</h2>
+                <p style={{ fontSize: '12.5px', color: 'var(--muted)', margin: '2px 0 0 0' }}>
+                  Define what makes a lead sales-ready for <strong>{businessProfile.businessName}</strong>. Choose, edit, or add custom criteria enforced by the 45s AI setter.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleOpenAddCriterion}
+              className="btn-accent"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', padding: '8px 14px' }}
+            >
+              <Plus size={15} /> Add Custom Criterion
+            </button>
+          </div>
+
+          {/* 1-Click Industry Presets Bar */}
+          <div style={{ background: 'var(--paper)', padding: '12px 16px', borderRadius: '10px', border: '1px solid var(--line)', marginBottom: '18px' }}>
+            <div style={{ fontSize: '11.5px', fontWeight: 800, color: 'var(--ink)', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sparkles size={14} color="var(--accent-deep)" />
+              Load Industry Preset Rubric:
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {[
+                { id: 'consulting', label: '💼 Consulting & Strategy' },
+                { id: 'tech_services', label: '💻 IT & Custom Software' },
+                { id: 'financial_advisory', label: '💰 Financial Advisory' },
+                { id: 'agency', label: '⚡ Marketing Agency' },
+                { id: 'default', label: '🏢 Standard B2B' },
+              ].map((p) => {
+                const active = selectedIndustryPreset === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => handleApplyPreset(p.id)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      border: active ? '1.5px solid var(--accent-deep)' : '1px solid var(--line)',
+                      background: active ? 'var(--ink)' : 'var(--white)',
+                      color: active ? 'var(--accent)' : 'var(--ink)',
+                      fontSize: '11.5px',
+                      fontWeight: active ? 800 : 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '22px' }}>
             {/* Minimum AI Score Slider */}
-            <div style={{ background: 'var(--paper)', padding: '14px', borderRadius: '8px', border: '1px solid var(--line)' }}>
+            <div style={{ background: 'var(--white)', padding: '14px 18px', borderRadius: '10px', border: '1px solid var(--line)', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontSize: '12.5px', fontWeight: 700 }}>Minimum Sales-Ready Score Threshold</span>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--accent-deep)' }}>
-                  {qualificationPolicy.minScore} / 100
+                <span style={{ fontSize: '13px', fontWeight: 700 }}>Minimum Sales-Ready Score Threshold</span>
+                <span style={{ fontSize: '14.5px', fontWeight: 800, color: 'var(--accent-deep)' }}>
+                  {minScore} / 100 Points
                 </span>
               </div>
               <input
@@ -419,122 +582,333 @@ export default function OnboardingWizard({ session, onNavigate }: OnboardingWiza
                 min="50"
                 max="95"
                 step="5"
-                value={qualificationPolicy.minScore}
-                onChange={(e) => setQualificationPolicy({ ...qualificationPolicy, minScore: Number(e.target.value) })}
-                style={{ width: '100%', accentColor: 'var(--ink)' }}
+                value={minScore}
+                onChange={(e) => setMinScore(Number(e.target.value))}
+                style={{ width: '100%', accentColor: 'var(--ink)', cursor: 'pointer' }}
               />
-              <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                Leads scoring above {qualificationPolicy.minScore} are automatically routed to senior Closers with booked calendar demos.
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
+                <span>Lenient (50 pts)</span>
+                <span>Balanced (75 pts)</span>
+                <span>Strict Unicorn (95 pts)</span>
+              </div>
+            </div>
+
+            {/* Criteria List Header & Counter */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: 'var(--ink)' }}>
+                Active Qualification Rubric ({criteria.filter((c) => c.enabled).length} Enabled of {criteria.length})
+              </div>
+              <span style={{ fontSize: '11.5px', color: 'var(--muted)', background: 'rgba(17, 21, 18, 0.06)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>
+                Total Points: {criteria.filter((c) => c.enabled).reduce((acc, c) => acc + c.weight, 0)} pts
               </span>
             </div>
 
-            {/* Checklist Policy Parameters */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  background: 'var(--white)',
-                  border: '1px solid var(--line)',
-                  cursor: 'pointer',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={qualificationPolicy.requireBudget}
-                  onChange={(e) => setQualificationPolicy({ ...qualificationPolicy, requireBudget: e.target.checked })}
-                  style={{ marginTop: '2px' }}
-                />
-                <div>
-                  <div style={{ fontSize: '12.5px', fontWeight: 700 }}>Require Minimum Budget</div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)' }}>₦{qualificationPolicy.minBudget.toLocaleString()}+ budget confirmed</div>
-                </div>
-              </label>
+            {/* Dynamic Criteria List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {criteria.map((criterion) => {
+                const categoryColors: Record<string, { bg: string; text: string }> = {
+                  budget: { bg: '#dcfce7', text: '#166534' },
+                  authority: { bg: '#fef3c7', text: '#92400e' },
+                  urgency: { bg: '#fee2e2', text: '#991b1b' },
+                  need: { bg: '#e0e7ff', text: '#3730a3' },
+                  location: { bg: '#f1f5f9', text: '#475569' },
+                  custom: { bg: '#f3e8ff', text: '#6b21a8' },
+                };
+                const catColor = categoryColors[criterion.category] || categoryColors.custom;
 
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  background: 'var(--white)',
-                  border: '1px solid var(--line)',
-                  cursor: 'pointer',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={qualificationPolicy.requireDecisionMaker}
-                  onChange={(e) => setQualificationPolicy({ ...qualificationPolicy, requireDecisionMaker: e.target.checked })}
-                  style={{ marginTop: '2px' }}
-                />
-                <div>
-                  <div style={{ fontSize: '12.5px', fontWeight: 700 }}>Confirm Decision-Maker</div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Owner, Director, MD or Head of Dept</div>
-                </div>
-              </label>
+                return (
+                  <div
+                    key={criterion.id}
+                    style={{
+                      padding: '14px 16px',
+                      borderRadius: '10px',
+                      background: criterion.enabled ? 'var(--white)' : '#f9fafb',
+                      border: criterion.enabled ? '1px solid var(--line)' : '1px dashed #d1d5db',
+                      opacity: criterion.enabled ? 1 : 0.65,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: '14px',
+                      boxShadow: criterion.enabled ? 'var(--shadow-sm)' : 'none',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: 1 }}>
+                      <input
+                        type="checkbox"
+                        checked={criterion.enabled}
+                        onChange={() => handleToggleCriterion(criterion.id)}
+                        style={{ width: '17px', height: '17px', marginTop: '3px', cursor: 'pointer', accentColor: 'var(--ink)' }}
+                        title="Toggle criterion ON or OFF"
+                      />
 
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  background: 'var(--white)',
-                  border: '1px solid var(--line)',
-                  cursor: 'pointer',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={qualificationPolicy.requireLocationFit}
-                  onChange={(e) => setQualificationPolicy({ ...qualificationPolicy, requireLocationFit: e.target.checked })}
-                  style={{ marginTop: '2px' }}
-                />
-                <div>
-                  <div style={{ fontSize: '12.5px', fontWeight: 700 }}>Strict Location Match</div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Within serviceable zones</div>
-                </div>
-              </label>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: 800,
+                              textTransform: 'uppercase',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              background: catColor.bg,
+                              color: catColor.text,
+                            }}
+                          >
+                            {criterion.category}
+                          </span>
 
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '10px',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  background: 'var(--white)',
-                  border: '1px solid var(--line)',
-                  cursor: 'pointer',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={qualificationPolicy.autoBookAppointments}
-                  onChange={(e) => setQualificationPolicy({ ...qualificationPolicy, autoBookAppointments: e.target.checked })}
-                  style={{ marginTop: '2px' }}
-                />
-                <div>
-                  <div style={{ fontSize: '12.5px', fontWeight: 700 }}>Automated Demo Booking</div>
-                  <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Auto-propose time slots via AI</div>
-                </div>
-              </label>
+                          <strong style={{ fontSize: '13.5px', color: 'var(--ink)' }}>
+                            {criterion.name}
+                          </strong>
+
+                          {criterion.thresholdValue && (
+                            <span style={{ fontSize: '11px', background: 'var(--paper)', border: '1px solid var(--line)', padding: '1px 7px', borderRadius: '4px', color: 'var(--muted)', fontWeight: 600 }}>
+                              {criterion.thresholdValue}
+                            </span>
+                          )}
+
+                          <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--accent-deep)', marginLeft: 'auto' }}>
+                            +{criterion.weight} pts
+                          </span>
+                        </div>
+
+                        <p style={{ margin: '0 0 6px 0', fontSize: '12px', color: 'var(--muted)', lineHeight: 1.4 }}>
+                          {criterion.description}
+                        </p>
+
+                        <div
+                          style={{
+                            fontSize: '11.5px',
+                            color: '#1e293b',
+                            background: '#f8fafc',
+                            padding: '6px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid #e2e8f0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                          }}
+                        >
+                          <MessageSquare size={12} color="#64748b" />
+                          <span>
+                            <strong>AI Question:</strong> <em>"{criterion.qualifyingQuestion}"</em>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions: Edit & Delete */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        onClick={() => handleOpenEditCriterion(criterion)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--line)',
+                          borderRadius: '6px',
+                          padding: '6px 8px',
+                          cursor: 'pointer',
+                          color: 'var(--ink)',
+                          fontSize: '11px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                        title="Edit Criterion & AI Question"
+                      >
+                        <Edit3 size={13} /> Edit
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteCriterion(criterion.id)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid #fee2e2',
+                          borderRadius: '6px',
+                          padding: '6px 8px',
+                          cursor: 'pointer',
+                          color: '#ef4444',
+                        }}
+                        title="Delete Criterion"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+
+            {/* Auto Booking Checkbox */}
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px',
+                padding: '14px',
+                borderRadius: '8px',
+                background: 'var(--paper)',
+                border: '1px solid var(--line)',
+                cursor: 'pointer',
+                marginTop: '6px',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={autoBookAppointments}
+                onChange={(e) => setAutoBookAppointments(e.target.checked)}
+                style={{ marginTop: '2px', accentColor: 'var(--ink)' }}
+              />
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 700 }}>
+                  Automated Demo & Discovery Call Scheduling
+                </div>
+                <div style={{ fontSize: '11.5px', color: 'var(--muted)' }}>
+                  When a lead qualifies with a score &gt;= {minScore}, the AI setter autonomously proposes time slots and syncs directly with closer Google Meet / Cal.com calendars.
+                </div>
+              </div>
+            </label>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', borderTop: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '16px', borderTop: '1px solid var(--line)' }}>
             <button className="btn-secondary" onClick={() => setCurrentStep(1)}>
               Back
             </button>
             <button className="btn-accent" onClick={() => setCurrentStep(3)}>
               Proceed to Team & Closers Setup <ArrowRight size={15} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* CRITERIA ADD / EDIT MODAL */}
+      {(isAddingCriterion || editingCriterion) && (
+        <div className="modal-overlay" onClick={() => { setIsAddingCriterion(false); setEditingCriterion(null); }}>
+          <div
+            className="modal-content"
+            style={{ maxWidth: '580px', maxHeight: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800 }}>
+                  {editingCriterion ? 'Edit Qualification Criterion' : 'Add Custom Qualification Criterion'}
+                </h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--muted)' }}>
+                  Define the condition and exact question asked by the 45-second AI qualification engine
+                </p>
+              </div>
+              <button
+                onClick={() => { setIsAddingCriterion(false); setEditingCriterion(null); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCriterionForm} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                      Criterion Name *
+                    </label>
+                    <input
+                      required
+                      value={critForm.name}
+                      onChange={(e) => setCritForm({ ...critForm, name: e.target.value })}
+                      placeholder="e.g. Require 20+ Staff or Minimum ₦2M Budget"
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                      Category
+                    </label>
+                    <select
+                      value={critForm.category}
+                      onChange={(e) => setCritForm({ ...critForm, category: e.target.value as any })}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px', background: 'var(--white)' }}
+                    >
+                      <option value="budget">Budget / Deal Size</option>
+                      <option value="authority">Decision Maker Authority</option>
+                      <option value="urgency">Urgency / Timeline</option>
+                      <option value="need">Service Need & Scope</option>
+                      <option value="location">Geographic Location</option>
+                      <option value="custom">Custom Requirement</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                      Threshold / Target Value
+                    </label>
+                    <input
+                      value={critForm.thresholdValue}
+                      onChange={(e) => setCritForm({ ...critForm, thresholdValue: e.target.value })}
+                      placeholder="e.g. ₦1,500,000+ or MD / Founder"
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                      Score Contribution (Weight)
+                    </label>
+                    <input
+                      type="number"
+                      min="5"
+                      max="50"
+                      value={critForm.weight}
+                      onChange={(e) => setCritForm({ ...critForm, weight: Number(e.target.value) })}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px' }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                    Description
+                  </label>
+                  <input
+                    value={critForm.description}
+                    onChange={(e) => setCritForm({ ...critForm, description: e.target.value })}
+                    placeholder="e.g. Validates that the client has approved budget before routing to senior closers"
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                    💬 AI Setter Discovery Question
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={critForm.qualifyingQuestion}
+                    onChange={(e) => setCritForm({ ...critForm, qualifyingQuestion: e.target.value })}
+                    placeholder="e.g. What budget range has your board approved for this advisory project?"
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12.5px', lineHeight: 1.4 }}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                    This is the exact question the autonomous AI setter will ask the lead on WhatsApp, SMS, or inbound chat.
+                  </span>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => { setIsAddingCriterion(false); setEditingCriterion(null); }}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-accent" style={{ padding: '9px 20px', fontWeight: 700 }}>
+                  <Check size={14} /> {editingCriterion ? 'Save Changes' : 'Add Criterion'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

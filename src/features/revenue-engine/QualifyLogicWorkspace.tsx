@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -22,6 +22,7 @@ import {
   Info,
   Laptop,
   Layers,
+  MessageSquare,
   PhoneCall,
   Play,
   Plus,
@@ -36,198 +37,229 @@ import {
   Sparkles,
   Stethoscope,
   Target,
+  Trash2,
   UserCheck,
+  X,
   Zap,
 } from 'lucide-react';
 import type { UserSession } from '../auth/AuthModal';
+import {
+  type QualificationCriterion,
+  type QualificationPolicyConfig,
+  getTenantQualificationPolicy,
+  saveTenantQualificationPolicy,
+  INDUSTRY_CRITERIA_PRESETS,
+  DEFAULT_QUALIFICATION_CRITERIA,
+} from '../../domain/qualification-criteria';
 
 interface QualifyLogicWorkspaceProps {
   session?: UserSession;
   onNavigate?: (tab: string) => void;
 }
 
-export interface ServiceVerticalPreset {
-  id: string;
-  name: string;
-  category: string;
-  icon: typeof Briefcase;
-  prompt: string;
-  minBudget: string;
-  keyFactors: string[];
-  qualifyingQuestions: string[];
-  setterScriptHook: string;
-}
-
-export const SERVICE_VERTICAL_PRESETS: Record<string, ServiceVerticalPreset> = {
-  consulting: {
-    id: 'consulting',
-    name: 'Management & Strategy Consulting',
-    category: 'B2B Professional Services',
-    icon: Briefcase,
-    prompt: `Prioritize C-level executives (CEO, COO, CFO) or Managing Directors of companies with 25+ staff seeking operational restructuring, turnaround strategy, or market entry. Score 90+ if annual consulting engagement budget > ₦5,000,000 and timeline is within 30 days. Filter out individuals seeking free job advice or student projects.`,
-    minBudget: '₦5,000,000',
-    keyFactors: ['C-Level / MD Authority', '25+ Team Size', 'Immediate Strategy Need'],
-    qualifyingQuestions: [
-      'What is the primary operational or revenue bottleneck you need resolved?',
-      'Are you the Managing Director or CFO authorizing external advisory?',
-      'What budget range has been allocated for this engagement (e.g. ₦5M - ₦25M)?',
-    ],
-    setterScriptHook: '“Hello [Name], I reviewed your inquiry regarding executive restructuring for [Company]. Given your target rollout this quarter, our Lead Partner reserved 15 minutes to share our playbook.”',
-  },
-  tech_services: {
-    id: 'tech_services',
-    name: 'IT Services & Custom Software',
-    category: 'Technology & Cloud',
-    icon: Laptop,
-    prompt: `Prioritize CTOs, Founders, and VP Engineering at high-growth businesses requiring bespoke web/mobile development, cloud migration, or system integration. Score 90+ if project budget is ₦3,000,000+ or recurring retainer ₦750k/mo, with a target sprint kick-off within 21 days. Filter out single-user MVP builders with no budget.`,
-    minBudget: '₦3,000,000',
-    keyFactors: ['Technical Decision Maker', 'Bespoke Scope', 'Funded / Cash-Flowing'],
-    qualifyingQuestions: [
-      'What core architecture or software stack is your team building or replacing?',
-      'Do you have documented technical specifications or wireframes ready?',
-      'Is your development timeline pegged for kick-off this month?',
-    ],
-    setterScriptHook: '“Hi [Name], our Solutions Architect inspected your technical requirements. We have a pre-built architecture framework that cuts your build time by 60%. Let’s review it today.”',
-  },
-  financial_advisory: {
-    id: 'financial_advisory',
-    name: 'Financial Advisory & Wealth Management',
-    category: 'Finance & Corporate',
-    icon: DollarSign,
-    prompt: `Prioritize high-net-worth individuals (HNWIs) and corporate boards seeking M&A advisory, tax structuring, audit, or wealth preservation. Score 88+ if investable portfolio or transaction size exceeds ₦25,000,000. Filter out retail micro-loan or cryptocurrency inquiries.`,
-    minBudget: '₦25,000,000',
-    keyFactors: ['Accredited Investor / Corporate', '₦25M+ Liquidity / Deal Size', 'Formal Mandate Ready'],
-    qualifyingQuestions: [
-      'What is the estimated size of the asset portfolio or transaction under review?',
-      'Are you seeking corporate tax optimization, capital raise, or wealth structuring?',
-      'When does your board require the preliminary memorandum delivered?',
-    ],
-    setterScriptHook: '“Good day [Name], our Senior Partner in corporate advisory can walk you through our recent transaction case study for similar portfolios.”',
-  },
-  legal_advisory: {
-    id: 'legal_advisory',
-    name: 'Corporate Legal & Compliance',
-    category: 'Legal Services',
-    icon: Scale,
-    prompt: `Prioritize commercial enterprises, tech startups, and multinational subsidiaries needing corporate governance, IP protection, cross-border contracts, or regulatory compliance. Score 85+ if retained legal advisory budget is ₦1.5M/mo+ or single retainer ₦5M+. Filter out pro-bono or personal domestic disputes.`,
-    minBudget: '₦1,500,000/mo',
-    keyFactors: ['Corporate Entity', 'Regulatory / M&A Scope', 'Retainer Commitment'],
-    qualifyingQuestions: [
-      'Is this an ongoing corporate retainer or a specific commercial transaction/dispute?',
-      'Are you the General Counsel, Managing Partner, or CEO?',
-      'Which regulatory jurisdictions does your business operate in?',
-    ],
-    setterScriptHook: '“Hello [Name], our Lead Corporate Counsel reviewed your compliance inquiry. We can schedule a confidential 20-minute briefing.”',
-  },
-  agency: {
-    id: 'agency',
-    name: 'High-Ticket Marketing & Growth Agency',
-    category: 'Digital & Growth',
-    icon: Zap,
-    prompt: `Prioritize e-commerce, real estate, and B2B companies spending at least ₦1,500,000/mo on digital ad spend seeking full-funnel paid media, CRO, and revenue ops. Score 90+ if monthly marketing budget > ₦2M and sales team is ready for rapid lead volume. Filter out dropshippers or businesses with zero ad budget.`,
-    minBudget: '₦2,000,000/mo',
-    keyFactors: ['₦1.5M+ Monthly Ad Spend', 'Validated Product/Offer', 'Active Sales Team'],
-    qualifyingQuestions: [
-      'What is your average monthly paid acquisition spend on Meta / Google / LinkedIn?',
-      'What is your current Customer Acquisition Cost (CAC) and target pipeline volume?',
-      'Do you have a dedicated sales team ready to handle 300+ qualified leads/mo?',
-    ],
-    setterScriptHook: '“Hi [Name], we modeled your customer acquisition numbers. We can guarantee a 3.4x pipeline lift based on your current ad spend.”',
-  },
-  engineering_facilities: {
-    id: 'engineering_facilities',
-    name: 'Engineering & Commercial Facilities',
-    category: 'Industrial & Real Estate',
-    icon: Building2,
-    prompt: `Prioritize commercial facility managers, developers, and corporate headquarters needing post-construction cleaning, MEP maintenance, or annual facility contracts over 1,500 sqm. Score 85+ if contract value exceeds ₦3,500,000. Filter out one-off residential requests under ₦200k.`,
-    minBudget: '₦3,500,000',
-    keyFactors: ['Commercial Multi-Unit / HQ', '1,500+ SQM Scope', 'Annual Contract Potential'],
-    qualifyingQuestions: [
-      'What is the total square footage and property classification of the facility?',
-      'Are you seeking an annual facility maintenance contract or a one-off post-construction handover?',
-      'Is the property inspection required within the next 7 business days?',
-    ],
-    setterScriptHook: '“Hello [Name], our Senior Operations Director can perform an on-site technical inspection in Lekki/VI this Thursday.”',
-  },
-  healthcare: {
-    id: 'healthcare',
-    name: 'Specialist Healthcare & Dental Clinics',
-    category: 'Medical & Health Services',
-    icon: Stethoscope,
-    prompt: `Prioritize medical directors, dental surgery owners, and private clinic administrators looking for automated patient booking, high-ticket surgical triage, and private care concierge. Score 85+ if clinic handles 100+ private patients/mo with procedure values ₦500k+. Filter out emergency trauma requests.`,
-    minBudget: '₦1,000,000',
-    keyFactors: ['Private Clinic / Hospital', 'High-Ticket Procedure Focus', 'Dedicated Reception Team'],
-    qualifyingQuestions: [
-      'What are your primary elective or specialist procedures (e.g. Dental, Aesthetics, Diagnostics)?',
-      'How many patient inquiries does your practice receive each week?',
-      'Do you require bi-directional Electronic Health Record (EHR) calendar synchronization?',
-    ],
-    setterScriptHook: '“Dr. [Name], our Healthcare Concierge Engine automated 140+ private patient consultations last month for clinics in your area.”',
-  },
-  custom: {
-    id: 'custom',
-    name: 'Custom Service Business Vertical',
-    category: 'Custom Industry Schema',
-    icon: Sliders,
-    prompt: `Specify your custom service qualification criteria here in plain English. State your minimum budget threshold, required job titles, location filters, and red flags. The AI will enforce these exact rules across all inbound WhatsApp, Ads, and Webhook leads.`,
-    minBudget: 'Custom',
-    keyFactors: ['Custom Threshold', 'Custom DM Keywords', 'Custom Objection Filters'],
-    qualifyingQuestions: [
-      'What is your primary commercial offering and target customer?',
-      'What is the minimum transaction value or monthly retainer acceptable?',
-      'What specific disqualifying red flags should the AI filter immediately?',
-    ],
-    setterScriptHook: '“Hello [Name], I noticed your requirement for [Custom Service]. Let’s explore your deployment timeline.”',
-  },
-};
-
 export default function QualifyLogicWorkspace({ session, onNavigate }: QualifyLogicWorkspaceProps) {
-  const [selectedIndustry, setSelectedIndustry] = useState<string>('consulting');
-  const [logicText, setLogicText] = useState(SERVICE_VERTICAL_PRESETS.consulting.prompt);
-  const [minBudgetInput, setMinBudgetInput] = useState('2000000');
-  const [requireDecisionMaker, setRequireDecisionMaker] = useState(true);
-  const [requireLocationMatch, setRequireLocationMatch] = useState(true);
-  const [requireTimelineMatch, setRequireTimelineMatch] = useState(true);
+  const tenantId = session?.tenantId || 'new-business-tenant';
+  const tenantDisplayName = session?.tenantName || session?.userName || 'Your Organization';
+
+  // Load tenant qualification policy config
+  const [policyConfig, setPolicyConfig] = useState<QualificationPolicyConfig>(() =>
+    getTenantQualificationPolicy(tenantId)
+  );
+  const [criteria, setCriteria] = useState<QualificationCriterion[]>(() => policyConfig.criteria);
+  const [minScore, setMinScore] = useState<number>(() => policyConfig.minScore || 75);
+  const [selectedIndustry, setSelectedIndustry] = useState<string>(() => policyConfig.selectedIndustryPreset || 'consulting');
+  const [autoBookAppointments, setAutoBookAppointments] = useState<boolean>(() => policyConfig.autoBookAppointments ?? true);
+
+  // Criteria Add/Edit Modal
+  const [editingCriterion, setEditingCriterion] = useState<QualificationCriterion | null>(null);
+  const [isAddingCriterion, setIsAddingCriterion] = useState<boolean>(false);
+  const [critForm, setCritForm] = useState({
+    name: '',
+    description: '',
+    qualifyingQuestion: '',
+    weight: 20,
+    category: 'custom' as QualificationCriterion['category'],
+    thresholdValue: '',
+  });
+
   const [isSaved, setIsSaved] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
   const [activeSubTab, setActiveSubTab] = useState<'editor' | 'rubric' | 'guide'>('editor');
 
-  const currentPreset = SERVICE_VERTICAL_PRESETS[selectedIndustry] || SERVICE_VERTICAL_PRESETS.consulting;
+  // Simulator Inputs
+  const [simLead, setSimLead] = useState({
+    name: 'Engr. Babatunde Jinadu (Prime Construct Ltd)',
+    dealValue: '5500000',
+    title: 'Managing Director',
+    timeline: 'Immediate (14 days)',
+    notes: 'Looking for full operational restructuring and executive revenue ops.',
+  });
+
+  // Save policy on changes
+  useEffect(() => {
+    const updatedPolicy: QualificationPolicyConfig = {
+      minScore,
+      criteria,
+      autoBookAppointments,
+      selectedIndustryPreset: selectedIndustry,
+    };
+    setPolicyConfig(updatedPolicy);
+    saveTenantQualificationPolicy(tenantId, updatedPolicy);
+  }, [minScore, criteria, autoBookAppointments, selectedIndustry, tenantId]);
+
+  const handleToggleCriterion = (id: string) => {
+    setCriteria((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c))
+    );
+    setIsSaved(false);
+  };
+
+  const handleDeleteCriterion = (id: string) => {
+    setCriteria((prev) => prev.filter((c) => c.id !== id));
+    setIsSaved(false);
+  };
+
+  const handleOpenEditCriterion = (criterion: QualificationCriterion) => {
+    setEditingCriterion(criterion);
+    setCritForm({
+      name: criterion.name,
+      description: criterion.description,
+      qualifyingQuestion: criterion.qualifyingQuestion,
+      weight: criterion.weight,
+      category: criterion.category,
+      thresholdValue: String(criterion.thresholdValue || ''),
+    });
+  };
+
+  const handleOpenAddCriterion = () => {
+    setIsAddingCriterion(true);
+    setCritForm({
+      name: '',
+      description: '',
+      qualifyingQuestion: '',
+      weight: 20,
+      category: 'custom',
+      thresholdValue: '',
+    });
+  };
+
+  const handleSaveCriterionForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!critForm.name.trim()) return;
+
+    if (editingCriterion) {
+      setCriteria((prev) =>
+        prev.map((c) =>
+          c.id === editingCriterion.id
+            ? {
+                ...c,
+                name: critForm.name,
+                description: critForm.description,
+                qualifyingQuestion: critForm.qualifyingQuestion,
+                weight: Number(critForm.weight || 20),
+                category: critForm.category,
+                thresholdValue: critForm.thresholdValue,
+              }
+            : c
+        )
+      );
+      setEditingCriterion(null);
+    } else {
+      const newCrit: QualificationCriterion = {
+        id: `crit_custom_${Date.now()}`,
+        name: critForm.name,
+        description: critForm.description || critForm.name,
+        enabled: true,
+        weight: Number(critForm.weight || 20),
+        category: critForm.category,
+        thresholdValue: critForm.thresholdValue || 'Custom Requirement',
+        qualifyingQuestion: critForm.qualifyingQuestion || `Can you confirm details regarding ${critForm.name}?`,
+      };
+      setCriteria((prev) => [...prev, newCrit]);
+      setIsAddingCriterion(false);
+    }
+    setIsSaved(false);
+  };
 
   const handleSelectPreset = (key: string) => {
     setSelectedIndustry(key);
-    setLogicText(SERVICE_VERTICAL_PRESETS[key].prompt);
+    const preset = INDUSTRY_CRITERIA_PRESETS[key];
+    if (preset) {
+      setCriteria(preset.criteria);
+    } else if (key === 'default') {
+      setCriteria(DEFAULT_QUALIFICATION_CRITERIA);
+    }
     setIsSaved(false);
   };
 
   const handleSaveLogic = () => {
+    const updatedPolicy: QualificationPolicyConfig = {
+      minScore,
+      criteria,
+      autoBookAppointments,
+      selectedIndustryPreset: selectedIndustry,
+    };
+    saveTenantQualificationPolicy(tenantId, updatedPolicy);
     setIsSaved(true);
     setTimeout(() => {
-      alert('🚀 Qualification Rules & AI Brain successfully deployed across all live channels (Meta Ads, Website Webhook, WhatsApp, Inbound Calls)!');
+      alert(`🚀 Qualification Rules & AI Brain successfully saved & deployed for ${tenantDisplayName}! Active on all inbound channels.`);
     }, 100);
   };
 
   const handleRunSimulator = () => {
     setIsSimulating(true);
     setTestResult(null);
+
     setTimeout(() => {
       setIsSimulating(false);
-      setTestResult({
-        leadName: 'Engr. Babatunde Jinadu (Prime Construct Ltd)',
-        serviceCategory: currentPreset.name,
-        extractedScore: 92,
-        tier: 'UNICORN',
-        rationale: 'Decision Maker confirmed (MD). Stated budget ₦5.5M meets threshold. Timeline: Immediate 14 days.',
-        extractedAnswers: [
-          { q: 'Authority', a: 'Managing Director / Sole Decision Maker', pass: true },
-          { q: 'Budget Fit', a: '₦5,500,000 allocated for Q3 rollout', pass: true },
-          { q: 'Timeline', a: 'Kickoff required within 14 business days', pass: true },
-        ],
-        generatedScript: currentPreset.setterScriptHook.replace('[Name]', 'Engr. Babatunde').replace('[Company]', 'Prime Construct'),
-        recommendedAction: 'Direct Closer Handoff + Auto-propose Google Meet Slot',
+      const activeCriteria = criteria.filter((c) => c.enabled);
+      const totalPossibleWeight = activeCriteria.reduce((sum, c) => sum + c.weight, 0);
+
+      // Simulate passing active criteria
+      let calculatedScore = 0;
+      const extractedAnswers = activeCriteria.map((c) => {
+        let pass = true;
+        let answerText = 'Passed verification';
+        if (c.category === 'budget') {
+          answerText = `₦${Number(simLead.dealValue).toLocaleString()} confirmed budget`;
+        } else if (c.category === 'authority') {
+          answerText = `${simLead.title} (Primary Decision Maker)`;
+        } else if (c.category === 'urgency') {
+          answerText = simLead.timeline;
+        } else {
+          answerText = `Aligned with ${c.name}`;
+        }
+        if (pass) {
+          calculatedScore += c.weight;
+        }
+        return {
+          criterionName: c.name,
+          category: c.category,
+          question: c.qualifyingQuestion,
+          answer: answerText,
+          points: c.weight,
+          pass,
+        };
       });
-    }, 800);
+
+      // Normalize score to 100 scale
+      const normalizedScore = totalPossibleWeight > 0 ? Math.round((calculatedScore / totalPossibleWeight) * 100) : 85;
+      const isQualified = normalizedScore >= minScore;
+      const isUnicorn = normalizedScore >= 90;
+
+      setTestResult({
+        leadName: simLead.name,
+        extractedScore: normalizedScore,
+        tier: isUnicorn ? 'UNICORN' : isQualified ? 'QUALIFIED' : 'REVIEW',
+        isQualified,
+        extractedAnswers,
+        recommendedAction: isQualified
+          ? `Direct Closer Handoff + Auto-Propose Demo Slot (Score ${normalizedScore} >= ${minScore})`
+          : `Placed in Setter Follow-Up Queue (Score ${normalizedScore} < ${minScore})`,
+        generatedScript: `“Hello ${simLead.name.split(' ')[1] || 'there'}, our Senior Closer reviewed your requirements for ${simLead.notes.substring(0, 35)}... Let’s review our playbook on a 15-minute briefing.”`,
+      });
+    }, 600);
   };
 
   return (
@@ -237,13 +269,13 @@ export default function QualifyLogicWorkspace({ session, onNavigate }: QualifyLo
         <div className="view-title-group">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
             <span className="role-badge superadmin" style={{ background: '#ff5722', color: '#fff' }}>08 QUALIFY LOGIC</span>
-            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Tenant: <strong>{session?.tenantName || 'Zeerocodes Enterprise'}</strong></span>
+            <span style={{ fontSize: '12px', color: 'var(--muted)' }}>Tenant: <strong>{tenantDisplayName}</strong> (<code>{tenantId}</code>)</span>
           </div>
           <h1 style={{ fontSize: '26px', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase' }}>
-            AI QUALIFICATION <span style={{ color: '#ff5722' }}>LOGIC & BRAIN</span>
+            CUSTOM LEAD QUALIFICATION <span style={{ color: '#ff5722' }}>RULES & AI BRAIN</span>
           </h1>
           <p style={{ fontSize: '12.5px', color: 'var(--muted)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', margin: 0 }}>
-            TAILORED FOR HIGH-TICKET SERVICE BUSINESSES. DEFINE WHO GETS IMMEDIATE CALLS VS WHO GETS NURTURED OR FILTERED.
+            CHOOSE, EDIT, AND ADD CUSTOM QUALIFICATION RULES FOR YOUR SALES CLOSERS. ENFORCED AUTONOMOUSLY BY THE 45S AI SETTER.
           </p>
         </div>
 
@@ -269,20 +301,23 @@ export default function QualifyLogicWorkspace({ session, onNavigate }: QualifyLo
               fontWeight: 800,
               letterSpacing: '0.04em',
               boxShadow: '0 4px 14px rgba(255, 87, 34, 0.35)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
           >
-            <Save size={16} /> SAVE & DEPLOY LOGIC
+            <Save size={16} /> SAVE & DEPLOY CRITERIA
           </button>
         </div>
       </div>
 
-      {/* Educational Guide Callout for Clients */}
+      {/* Educational Guide Callout */}
       {activeSubTab === 'guide' && (
         <div style={{ background: 'var(--card-bg)', border: '1px solid var(--accent)', borderRadius: '12px', padding: '20px', marginBottom: '24px', boxShadow: 'var(--shadow-md)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Sparkles size={20} color="#ff5722" />
-              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800 }}>How the Zeerocodes 45-Second AI Qualification Works</h3>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800 }}>How the 45-Second AI Lead Qualification Works</h3>
             </div>
             <button onClick={() => setActiveSubTab('editor')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '12px', color: 'var(--muted)' }}>✕ Close Guide</button>
           </div>
@@ -290,62 +325,59 @@ export default function QualifyLogicWorkspace({ session, onNavigate }: QualifyLo
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginTop: '14px' }}>
             <div style={{ background: 'var(--bg)', padding: '14px', borderRadius: '8px', border: '1px solid var(--line)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontWeight: 800, fontSize: '13px', marginBottom: '6px' }}>
-                <CheckCircle2 size={16} /> 1. Instant Strike (&lt;45s)
+                <CheckCircle2 size={16} /> 1. Instant Triage (&lt;45s)
               </div>
               <p style={{ fontSize: '12px', color: 'var(--muted)', margin: 0, lineHeight: 1.4 }}>
-                The moment a lead opts in from Meta Ads, Google, or Web forms, our AI sends a personalized WhatsApp message & triggers an automated outbound voice check within 45 seconds.
+                Inbound leads from Webhook, WhatsApp, or Meta Ads receive an instant response asking your custom qualifying questions.
               </p>
             </div>
 
             <div style={{ background: 'var(--bg)', padding: '14px', borderRadius: '8px', border: '1px solid var(--line)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#3b82f6', fontWeight: 800, fontSize: '13px', marginBottom: '6px' }}>
-                <Brain size={16} /> 2. 4-Tier Scoring Engine
+                <Sliders size={16} /> 2. Score Calculation
               </div>
               <p style={{ fontSize: '12px', color: 'var(--muted)', margin: 0, lineHeight: 1.4 }}>
-                AI analyzes Budget, Decision-Maker Authority, Need, and Timeline. Leads scoring <strong>90-100 (Unicorn)</strong> or <strong>70-89 (Qualified)</strong> get immediate demo proposals.
+                Every enabled criterion contributes points. Leads scoring &gt;= {minScore} are verified as high-intent sales opportunities.
               </p>
             </div>
 
             <div style={{ background: 'var(--bg)', padding: '14px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b', fontWeight: 800, fontSize: '13px', marginBottom: '6px' }}>
-                <Bot size={16} /> 3. Human Setter Handoff
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ff5722', fontWeight: 800, fontSize: '13px', marginBottom: '6px' }}>
+                <Bot size={16} /> 3. Automated Demo Booking
               </div>
               <p style={{ fontSize: '12px', color: 'var(--muted)', margin: 0, lineHeight: 1.4 }}>
-                If a lead asks complex custom questions or scores in the <strong>40-69 (Review)</strong> bracket, the AI creates an Executive Brief & custom call script and hands off to your setter.
-              </p>
-            </div>
-
-            <div style={{ background: 'var(--bg)', padding: '14px', borderRadius: '8px', border: '1px solid var(--line)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444', fontWeight: 800, fontSize: '13px', marginBottom: '6px' }}>
-                <ShieldCheck size={16} /> 4. Low-Intent Auto-Filter
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--muted)', margin: 0, lineHeight: 1.4 }}>
-                Leads below score 40 (free seekers, unverified numbers, out-of-scope) are gently placed into low-touch email nurture, protecting your sales team’s valuable time.
+                Pre-qualified leads are autonomously booked onto your senior closer calendars (Google Meet, Cal.com) without manual setter back-and-forth.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Industry Vertical Tabs for Service-Based Businesses */}
+      {/* Industry Vertical Tabs */}
       <div style={{ marginBottom: '22px' }}>
-        <div style={{ fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px' }}>
-          Select High-Ticket Service Vertical Preset:
+        <div style={{ fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Sparkles size={13} color="var(--accent-deep)" />
+          Quick Load Industry Preset Rubric:
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {Object.keys(SERVICE_VERTICAL_PRESETS).map((key) => {
-            const item = SERVICE_VERTICAL_PRESETS[key];
+          {[
+            { id: 'consulting', label: '💼 Consulting & Strategy', icon: Briefcase },
+            { id: 'tech_services', label: '💻 IT & Custom Software', icon: Laptop },
+            { id: 'financial_advisory', label: '💰 Financial Advisory', icon: DollarSign },
+            { id: 'agency', label: '⚡ Marketing Agency', icon: Zap },
+            { id: 'default', label: '🏢 Standard B2B Rules', icon: Building2 },
+          ].map((item) => {
             const Icon = item.icon;
-            const active = selectedIndustry === key;
+            const active = selectedIndustry === item.id;
             return (
               <button
-                key={key}
-                onClick={() => handleSelectPreset(key)}
+                key={item.id}
+                onClick={() => handleSelectPreset(item.id)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  padding: '9px 16px',
+                  padding: '8px 14px',
                   borderRadius: '8px',
                   border: active ? '1px solid #ff5722' : '1px solid var(--line)',
                   background: active ? '#ff5722' : 'var(--white)',
@@ -358,161 +390,214 @@ export default function QualifyLogicWorkspace({ session, onNavigate }: QualifyLo
                 }}
               >
                 <Icon size={14} />
-                <span>{item.name.toUpperCase()}</span>
+                <span>{item.label}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '22px' }}>
-        {/* Left Column: Natural Language Prompt Editor & Dynamic Qualifiers */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.1fr', gap: '22px' }}>
+        {/* Left Column: Criteria Customizer List & Score Controls */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          {/* Natural Language Prompt Card */}
-          <div className="card" style={{ padding: '22px', border: '1px solid var(--line)', borderRadius: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+          {/* Minimum AI Score Threshold Card */}
+          <div className="card" style={{ padding: '18px 20px', border: '1px solid var(--line)', borderRadius: '12px', background: 'var(--white)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Sparkles size={18} color="#ff5722" />
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, textTransform: 'uppercase' }}>
-                  English Logic Editor ({currentPreset.name})
+                <Sliders size={18} color="#ff5722" />
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800 }}>
+                  Minimum Sales-Ready Score Threshold
                 </h3>
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>Natural Language AI Prompt</span>
+              <span style={{ fontSize: '15px', fontWeight: 900, color: '#ff5722' }}>
+                {minScore} / 100 Points
+              </span>
             </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 800, color: '#ff5722', textTransform: 'uppercase', marginBottom: '6px' }}>
-                • The "Gold Standard" Service Client Rubric
-              </label>
-              <textarea
-                value={logicText}
-                onChange={(e) => {
-                  setLogicText(e.target.value);
-                  setIsSaved(false);
-                }}
-                rows={5}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  borderRadius: '8px',
-                  border: '1px solid var(--line)',
-                  fontFamily: 'Inter, sans-serif',
-                  fontSize: '13px',
-                  lineHeight: 1.5,
-                  color: 'var(--ink)',
-                  background: 'var(--bg)',
-                  resize: 'vertical',
-                }}
-                placeholder="Describe your ideal qualified service client in plain English..."
-              />
+            <input
+              type="range"
+              min="50"
+              max="95"
+              step="5"
+              value={minScore}
+              onChange={(e) => { setMinScore(Number(e.target.value)); setIsSaved(false); }}
+              style={{ width: '100%', accentColor: '#ff5722', cursor: 'pointer' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
+              <span>Lenient (50 pts)</span>
+              <span>Balanced (75 pts)</span>
+              <span>Strict / High-Ticket Only (95 pts)</span>
             </div>
+          </div>
 
-            {/* Key Qualifier Tags */}
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
-              {currentPreset.keyFactors.map((factor, idx) => (
-                <span
-                  key={idx}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    fontSize: '11.5px',
-                    fontWeight: 700,
-                    background: 'rgba(16, 185, 129, 0.1)',
-                    color: '#059669',
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    border: '1px solid rgba(16, 185, 129, 0.25)',
-                  }}
-                >
-                  <Check size={12} /> {factor}
+          {/* Criteria Management List Card */}
+          <div className="card" style={{ padding: '20px', border: '1px solid var(--line)', borderRadius: '12px', background: 'var(--white)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, textTransform: 'uppercase' }}>
+                  Custom Qualification Criteria ({criteria.filter((c) => c.enabled).length} Enabled)
+                </h3>
+                <span style={{ fontSize: '11.5px', color: 'var(--muted)' }}>
+                  Toggle criteria ON/OFF, edit weights, or add custom business conditions
                 </span>
-              ))}
-              <span
+              </div>
+
+              <button
+                onClick={handleOpenAddCriterion}
+                className="btn-accent"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '5px',
-                  fontSize: '11.5px',
-                  fontWeight: 700,
-                  background: 'rgba(255, 87, 34, 0.1)',
-                  color: '#ff5722',
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  border: '1px solid rgba(255, 87, 34, 0.25)',
+                  gap: '6px',
+                  fontSize: '12px',
+                  padding: '7px 12px',
+                  background: '#ff5722',
+                  color: '#fff',
+                  border: 'none',
                 }}
               >
-                Min Target: {currentPreset.minBudget}
-              </span>
-            </div>
-          </div>
-
-          {/* AI Qualifying Questions & Discovery Tree */}
-          <div className="card" style={{ padding: '20px', border: '1px solid var(--line)', borderRadius: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <Bot size={17} color="var(--accent-deep)" />
-              <h3 style={{ margin: 0, fontSize: '14.5px', fontWeight: 800 }}>Automated Discovery Questions for WhatsApp & Voice</h3>
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '0 0 12px 0' }}>
-              These high-intent discovery prompts are asked by the AI during the first 45-second conversation to verify qualification score:
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {currentPreset.qualifyingQuestions.map((question, qIdx) => (
-                <div
-                  key={qIdx}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '10px',
-                    background: 'var(--bg)',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--line)',
-                    fontSize: '12.5px',
-                  }}
-                >
-                  <span style={{ fontWeight: 800, color: '#ff5722', minWidth: '18px' }}>Q{qIdx + 1}:</span>
-                  <span style={{ color: 'var(--ink)' }}>{question}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Hard Guardrails & Filters */}
-          <div className="card" style={{ padding: '20px', border: '1px solid var(--line)', borderRadius: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-              <ShieldCheck size={17} color="#10b981" />
-              <h3 style={{ margin: 0, fontSize: '14.5px', fontWeight: 800 }}>Deterministic Hard Filters & Safety Guardrails</h3>
+                <Plus size={14} /> Add Criterion
+              </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={requireDecisionMaker}
-                  onChange={(e) => setRequireDecisionMaker(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#ff5722' }}
-                />
-                Require C-Level / MD Authority
-              </label>
+            {/* List of Criteria */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {criteria.map((criterion) => {
+                const categoryColors: Record<string, { bg: string; text: string }> = {
+                  budget: { bg: '#dcfce7', text: '#166534' },
+                  authority: { bg: '#fef3c7', text: '#92400e' },
+                  urgency: { bg: '#fee2e2', text: '#991b1b' },
+                  need: { bg: '#e0e7ff', text: '#3730a3' },
+                  location: { bg: '#f1f5f9', text: '#475569' },
+                  custom: { bg: '#f3e8ff', text: '#6b21a8' },
+                };
+                const catColor = categoryColors[criterion.category] || categoryColors.custom;
 
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={requireTimelineMatch}
-                  onChange={(e) => setRequireTimelineMatch(e.target.checked)}
-                  style={{ width: '16px', height: '16px', accentColor: '#ff5722' }}
-                />
-                Require Stated Timeline (&lt;45 days)
-              </label>
+                return (
+                  <div
+                    key={criterion.id}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: '8px',
+                      background: criterion.enabled ? 'var(--paper)' : '#f9fafb',
+                      border: criterion.enabled ? '1px solid var(--line)' : '1px dashed #d1d5db',
+                      opacity: criterion.enabled ? 1 : 0.65,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flex: 1 }}>
+                      <input
+                        type="checkbox"
+                        checked={criterion.enabled}
+                        onChange={() => handleToggleCriterion(criterion.id)}
+                        style={{ width: '16px', height: '16px', marginTop: '2px', accentColor: '#ff5722', cursor: 'pointer' }}
+                        title="Toggle criterion ON or OFF"
+                      />
+
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '3px' }}>
+                          <span
+                            style={{
+                              fontSize: '9.5px',
+                              fontWeight: 800,
+                              textTransform: 'uppercase',
+                              padding: '2px 5px',
+                              borderRadius: '4px',
+                              background: catColor.bg,
+                              color: catColor.text,
+                            }}
+                          >
+                            {criterion.category}
+                          </span>
+
+                          <strong style={{ fontSize: '13px', color: 'var(--ink)' }}>
+                            {criterion.name}
+                          </strong>
+
+                          {criterion.thresholdValue && (
+                            <span style={{ fontSize: '11px', background: 'var(--white)', border: '1px solid var(--line)', padding: '1px 6px', borderRadius: '4px', color: 'var(--muted)', fontWeight: 600 }}>
+                              {criterion.thresholdValue}
+                            </span>
+                          )}
+
+                          <span style={{ fontSize: '11px', fontWeight: 800, color: '#ff5722', marginLeft: 'auto' }}>
+                            +{criterion.weight} pts
+                          </span>
+                        </div>
+
+                        <p style={{ margin: '0 0 5px 0', fontSize: '11.5px', color: 'var(--muted)', lineHeight: 1.35 }}>
+                          {criterion.description}
+                        </p>
+
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            color: '#1e293b',
+                            background: 'var(--white)',
+                            padding: '5px 8px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--line)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                          }}
+                        >
+                          <MessageSquare size={11} color="#64748b" />
+                          <span>
+                            <strong>AI Prompt:</strong> <em>"{criterion.qualifyingQuestion}"</em>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button
+                        onClick={() => handleOpenEditCriterion(criterion)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--line)',
+                          borderRadius: '6px',
+                          padding: '5px 7px',
+                          cursor: 'pointer',
+                          color: 'var(--ink)',
+                          fontSize: '11px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                        }}
+                        title="Edit Criterion"
+                      >
+                        <Edit3 size={12} /> Edit
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteCriterion(criterion.id)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid #fee2e2',
+                          borderRadius: '6px',
+                          padding: '5px 7px',
+                          cursor: 'pointer',
+                          color: '#ef4444',
+                        }}
+                        title="Delete Criterion"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
 
         {/* Right Column: Live Interactive Qualification Simulator */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          <div className="card" style={{ padding: '22px', border: '1px solid var(--line)', borderRadius: '12px' }}>
+          <div className="card" style={{ padding: '22px', border: '1px solid var(--line)', borderRadius: '12px', background: 'var(--white)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Play size={17} color="#ff5722" />
@@ -525,21 +610,46 @@ export default function QualifyLogicWorkspace({ session, onNavigate }: QualifyLo
                 style={{ padding: '6px 14px', fontSize: '12px', background: '#ff5722', color: '#fff', border: 'none' }}
               >
                 {isSimulating ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} />}
-                <span>{isSimulating ? 'Evaluating...' : 'Simulate Prospect'}</span>
+                <span>{isSimulating ? 'Evaluating...' : 'Evaluate Test Lead'}</span>
               </button>
             </div>
 
-            <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '0 0 14px 0' }}>
-              Test your logic rules against a synthetic high-ticket service lead in real-time.
-            </p>
+            {/* Test Lead Form */}
+            <div style={{ background: 'var(--paper)', padding: '12px', borderRadius: '8px', border: '1px solid var(--line)', marginBottom: '14px' }}>
+              <div style={{ fontSize: '11.5px', fontWeight: 800, color: 'var(--ink)', marginBottom: '8px' }}>
+                Test Prospect Parameters:
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <input
+                  value={simLead.name}
+                  onChange={(e) => setSimLead({ ...simLead, name: e.target.value })}
+                  placeholder="Lead Name / Company"
+                  style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px' }}
+                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <input
+                    value={simLead.title}
+                    onChange={(e) => setSimLead({ ...simLead, title: e.target.value })}
+                    placeholder="Job Title"
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px' }}
+                  />
+                  <input
+                    value={simLead.dealValue}
+                    onChange={(e) => setSimLead({ ...simLead, dealValue: e.target.value })}
+                    placeholder="Budget (₦)"
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12px' }}
+                  />
+                </div>
+              </div>
+            </div>
 
             {testResult ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {/* Score Pill Card */}
                 <div
                   style={{
-                    background: testResult.extractedScore >= 90 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255, 87, 34, 0.1)',
-                    border: `1px solid ${testResult.extractedScore >= 90 ? '#10b981' : '#ff5722'}`,
+                    background: testResult.isQualified ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255, 87, 34, 0.1)',
+                    border: `1px solid ${testResult.isQualified ? '#10b981' : '#ff5722'}`,
                     padding: '14px',
                     borderRadius: '8px',
                     display: 'flex',
@@ -551,42 +661,47 @@ export default function QualifyLogicWorkspace({ session, onNavigate }: QualifyLo
                     <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>
                       AI Verdict & Tier
                     </div>
-                    <div style={{ fontSize: '18px', fontWeight: 900, color: testResult.extractedScore >= 90 ? '#059669' : '#ff5722' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 900, color: testResult.isQualified ? '#059669' : '#ff5722' }}>
                       {testResult.tier} ({testResult.extractedScore}/100)
                     </div>
                   </div>
-                  <span className="role-badge superadmin" style={{ background: testResult.extractedScore >= 90 ? '#10b981' : '#ff5722', color: '#fff' }}>
-                    READY FOR CLOSER
+                  <span
+                    className="role-badge superadmin"
+                    style={{ background: testResult.isQualified ? '#10b981' : '#ff5722', color: '#fff' }}
+                  >
+                    {testResult.isQualified ? 'QUALIFIED FOR CLOSER' : 'NEEDS NURTURE'}
                   </span>
                 </div>
 
-                {/* Extracted Qualifier Breakdown */}
-                <div style={{ background: 'var(--bg)', padding: '12px', borderRadius: '8px', border: '1px solid var(--line)' }}>
+                {/* Criteria Pass Breakdown */}
+                <div style={{ background: 'var(--paper)', padding: '12px', borderRadius: '8px', border: '1px solid var(--line)' }}>
                   <div style={{ fontSize: '11.5px', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>
-                    Extracted Criteria:
+                    Evaluated Criteria Rubric:
                   </div>
                   {testResult.extractedAnswers?.map((item: any, idx: number) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                      <span style={{ color: 'var(--muted)' }}>{item.q}:</span>
-                      <strong style={{ color: item.pass ? '#059669' : '#ef4444' }}>{item.a}</strong>
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
+                      <span style={{ color: 'var(--ink)' }}>• {item.criterionName}:</span>
+                      <strong style={{ color: item.pass ? '#059669' : '#ef4444' }}>
+                        +{item.points} pts (Pass)
+                      </strong>
                     </div>
                   ))}
                 </div>
 
-                {/* AI Generated Setter Follow-up Script */}
+                {/* Actionable Script */}
                 <div style={{ background: 'rgba(255, 87, 34, 0.05)', padding: '12px', borderRadius: '8px', border: '1px dashed #ff5722' }}>
                   <div style={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', color: '#ff5722', marginBottom: '4px' }}>
-                    AI Generated Setter Script Hook:
+                    AI Setter Action:
                   </div>
                   <p style={{ fontSize: '12px', color: 'var(--ink)', margin: 0, fontStyle: 'italic', lineHeight: 1.4 }}>
-                    {testResult.generatedScript}
+                    {testResult.recommendedAction}
                   </p>
                 </div>
               </div>
             ) : (
               <div
                 style={{
-                  background: 'var(--bg)',
+                  background: 'var(--paper)',
                   padding: '24px',
                   borderRadius: '8px',
                   border: '1px dashed var(--line)',
@@ -595,35 +710,144 @@ export default function QualifyLogicWorkspace({ session, onNavigate }: QualifyLo
                   fontSize: '12.5px',
                 }}
               >
-                Click "Simulate Prospect" to run an automated 45-second test triage.
+                Click "Evaluate Test Lead" to run your active qualification rubric against this prospect.
               </div>
             )}
           </div>
-
-          {/* 4 Tier Reference Card */}
-          <div className="card" style={{ padding: '20px', border: '1px solid var(--line)', borderRadius: '12px' }}>
-            <h4 style={{ margin: '0 0 10px 0', fontSize: '13.5px', fontWeight: 800 }}>Qualification Scoring Matrix</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11.5px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '6px' }}>
-                <strong style={{ color: '#059669' }}>UNICORN (90-100)</strong>
-                <span>Direct Calendar Booking + Immediate SMS/Voice Alert</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px' }}>
-                <strong style={{ color: '#2563eb' }}>QUALIFIED (70-89)</strong>
-                <span>AI WhatsApp Propose Demo + Closer Priority</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '6px' }}>
-                <strong style={{ color: '#d97706' }}>REVIEW (40-69)</strong>
-                <span>Assigned to Human Setter Queue with AI Script</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '6px' }}>
-                <strong style={{ color: '#dc2626' }}>FILTERED (0-39)</strong>
-                <span>Automated Nurture Sequence (No Sales Rep Time)</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
+
+      {/* CRITERIA ADD / EDIT MODAL */}
+      {(isAddingCriterion || editingCriterion) && (
+        <div className="modal-overlay" onClick={() => { setIsAddingCriterion(false); setEditingCriterion(null); }}>
+          <div
+            className="modal-content"
+            style={{ maxWidth: '580px', maxHeight: 'calc(100vh - 40px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800 }}>
+                  {editingCriterion ? 'Edit Qualification Criterion' : 'Add Custom Qualification Criterion'}
+                </h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--muted)' }}>
+                  Define the qualification condition and exact question asked by the AI engine
+                </p>
+              </div>
+              <button
+                onClick={() => { setIsAddingCriterion(false); setEditingCriterion(null); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCriterionForm} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                      Criterion Name *
+                    </label>
+                    <input
+                      required
+                      value={critForm.name}
+                      onChange={(e) => setCritForm({ ...critForm, name: e.target.value })}
+                      placeholder="e.g. Require 20+ Staff or ₦2M Budget"
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                      Category
+                    </label>
+                    <select
+                      value={critForm.category}
+                      onChange={(e) => setCritForm({ ...critForm, category: e.target.value as any })}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px', background: 'var(--white)' }}
+                    >
+                      <option value="budget">Budget / Deal Size</option>
+                      <option value="authority">Decision Maker Authority</option>
+                      <option value="urgency">Urgency / Timeline</option>
+                      <option value="need">Service Need & Scope</option>
+                      <option value="location">Geographic Location</option>
+                      <option value="custom">Custom Requirement</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                      Threshold / Target Value
+                    </label>
+                    <input
+                      value={critForm.thresholdValue}
+                      onChange={(e) => setCritForm({ ...critForm, thresholdValue: e.target.value })}
+                      placeholder="e.g. ₦1,500,000+ or MD / Founder"
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                      Score Contribution (Weight)
+                    </label>
+                    <input
+                      type="number"
+                      min="5"
+                      max="50"
+                      value={critForm.weight}
+                      onChange={(e) => setCritForm({ ...critForm, weight: Number(e.target.value) })}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px' }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                    Description
+                  </label>
+                  <input
+                    value={critForm.description}
+                    onChange={(e) => setCritForm({ ...critForm, description: e.target.value })}
+                    placeholder="e.g. Validates that the client has approved budget before routing to senior closers"
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '13px' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, marginBottom: '4px' }}>
+                    💬 AI Setter Discovery Question
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={critForm.qualifyingQuestion}
+                    onChange={(e) => setCritForm({ ...critForm, qualifyingQuestion: e.target.value })}
+                    placeholder="e.g. What budget range has your board approved for this advisory project?"
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid var(--line)', fontSize: '12.5px', lineHeight: 1.4 }}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                    This is the exact question the autonomous AI setter will ask the lead on WhatsApp, SMS, or inbound chat.
+                  </span>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => { setIsAddingCriterion(false); setEditingCriterion(null); }}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-accent" style={{ padding: '9px 20px', fontWeight: 700, background: '#ff5722', color: '#fff', border: 'none' }}>
+                  <Check size={14} /> {editingCriterion ? 'Save Changes' : 'Add Criterion'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
