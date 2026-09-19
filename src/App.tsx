@@ -94,7 +94,15 @@ export default function App() {
     const saved = localStorage.getItem('zeero_user_session');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.tenantId) {
+          return {
+            ...parsed,
+            subscriptionPlan: parsed.subscriptionPlan || 'Enterprise Scale',
+            subscriptionExpiresAt: parsed.subscriptionExpiresAt || create30DaysFromNow(30),
+            subscriptionStatus: parsed.subscriptionStatus || 'active',
+          };
+        }
       } catch (e) {}
     }
     const initial = INITIAL_CLIENT_ACCOUNTS[0]; // zeerocodes@gmail.com Super Admin

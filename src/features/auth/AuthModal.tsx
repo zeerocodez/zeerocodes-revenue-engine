@@ -129,8 +129,10 @@ export const INITIAL_CLIENT_ACCOUNTS: ClientAccount[] = [
   },
 ];
 
-export function getDaysRemaining(expiryIso: string): number {
+export function getDaysRemaining(expiryIso?: string): number {
+  if (!expiryIso) return 30;
   const expiry = new Date(expiryIso).getTime();
+  if (isNaN(expiry)) return 30;
   const now = Date.now();
   const diffMs = expiry - now;
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
