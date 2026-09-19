@@ -384,6 +384,8 @@ export default function App() {
               background: !isSubscriptionExpired ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.15)',
               border: !isSubscriptionExpired ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.4)',
               cursor: 'pointer',
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
             }}
             title="Click to manage 7-day trial or subscription"
           >
@@ -391,7 +393,7 @@ export default function App() {
             <span style={{ fontSize: '11px', fontWeight: 700, color: !isSubscriptionExpired ? '#10b981' : '#f87171' }}>
               {!isSubscriptionExpired ? `🟢 7d Trial: ${daysRemaining}d Left` : '⚠️ Trial Ended'}
             </span>
-            <span style={{ fontSize: '9.5px', background: 'rgba(0,0,0,0.1)', padding: '1px 4px', borderRadius: '3px', color: 'var(--muted)' }}>
+            <span style={{ fontSize: '9.5px', background: 'rgba(0,0,0,0.08)', padding: '1px 4px', borderRadius: '3px', color: 'var(--muted)', fontWeight: 600 }}>
               Plans
             </span>
           </div>
@@ -412,6 +414,8 @@ export default function App() {
                 fontSize: '11px',
                 fontWeight: 800,
                 cursor: 'pointer',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
               }}
               title="Open Super Admin Client Management & Provisioning"
             >
@@ -430,6 +434,7 @@ export default function App() {
               border: '1px solid var(--line)',
               gap: '2px',
               flexShrink: 0,
+              whiteSpace: 'nowrap',
             }}
           >
             <button
@@ -451,6 +456,7 @@ export default function App() {
                 background: viewMode === 'client' ? '#10b981' : 'transparent',
                 color: viewMode === 'client' ? '#fff' : 'var(--muted)',
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
               }}
             >
               <Eye size={12} /> Client View
@@ -470,6 +476,7 @@ export default function App() {
                 background: viewMode === 'ops' ? '#ff5722' : 'transparent',
                 color: viewMode === 'ops' ? '#fff' : 'var(--muted)',
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
               }}
             >
               <Zap size={12} /> Zeerocodes Ops
@@ -502,20 +509,22 @@ export default function App() {
 
         <div className="top-nav-right">
           {/* Tenant & User Switcher Trigger */}
-          <div className="tenant-selector" onClick={() => openSignInModal('switch')} title="Click to switch client organization or renew 30-day access">
-            <Building2 size={15} color="var(--accent-deep)" />
-            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: 1.2 }}>
-              <span style={{ fontSize: '12px', fontWeight: 700 }}>{session.tenantName}</span>
-              <span style={{ fontSize: '10.5px', color: 'var(--muted)' }}>
-                {session.userName} • <strong style={{ textTransform: 'capitalize' }}>{session.role}</strong>
+          <div className="tenant-selector" onClick={() => openSignInModal('switch')} title="Click to switch organization or account">
+            <Building2 size={16} color="var(--accent-deep)" style={{ flexShrink: 0 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left', lineHeight: 1.15, minWidth: 0, marginRight: '2px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>
+                {session.userName}
+              </span>
+              <span style={{ fontSize: '10px', color: 'var(--muted)', whiteSpace: 'nowrap', textTransform: 'capitalize' }}>
+                {session.tenantName !== session.userName ? session.tenantName : `${session.role} account`}
               </span>
             </div>
-            <span className={`role-badge ${session.role}`}>{session.role}</span>
+            <span className={`role-badge ${session.role.toLowerCase()}`}>{session.role}</span>
           </div>
 
           <button
             className="btn-secondary"
-            style={{ padding: '7px 12px', fontSize: '12px' }}
+            style={{ padding: '6px 12px', fontSize: '12px', flexShrink: 0, whiteSpace: 'nowrap' }}
             onClick={() => navigateTo('Landing')}
           >
             Landing
@@ -528,13 +537,14 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               gap: '5px',
-              padding: '7px 10px',
+              padding: '6px 9px',
               background: 'transparent',
               border: '1px solid var(--line)',
               borderRadius: '6px',
               color: 'var(--muted)',
               fontSize: '11.5px',
               cursor: 'pointer',
+              flexShrink: 0,
             }}
           >
             <LogOut size={13} />
