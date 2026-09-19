@@ -98,8 +98,8 @@ export default function App() {
         if (parsed && parsed.tenantId) {
           return {
             ...parsed,
-            subscriptionPlan: parsed.subscriptionPlan || 'Enterprise Scale',
-            subscriptionExpiresAt: parsed.subscriptionExpiresAt || create30DaysFromNow(30),
+            subscriptionPlan: parsed.subscriptionPlan || 'Enterprise Scale (7-Day Free Trial)',
+            subscriptionExpiresAt: parsed.subscriptionExpiresAt || createTrialDaysFromNow(7),
             subscriptionStatus: parsed.subscriptionStatus || 'active',
           };
         }
@@ -174,9 +174,9 @@ export default function App() {
     }
   };
 
-  const handleRenewSubscription = (daysToAdd = 30) => {
+  const handleRenewSubscription = (daysToAdd = 7) => {
     if (!session) return;
-    const newExpiry = create30DaysFromNow(daysToAdd);
+    const newExpiry = createTrialDaysFromNow(daysToAdd);
     const updated: UserSession = {
       ...session,
       subscriptionExpiresAt: newExpiry,
