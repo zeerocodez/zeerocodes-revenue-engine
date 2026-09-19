@@ -72,18 +72,18 @@ const ALL_NAV_ITEMS: NavItem[] = [
   // Client Visible Tabs
   { id: 'Client Portal', hash: 'client-portal', label: 'Client Portal', icon: BarChart3, clientVisible: true },
   { id: 'Pipeline', hash: 'pipeline', label: 'Booked Deals CRM', icon: Zap, badge: 'Live', clientVisible: true },
-  { id: 'Lead Sources', hash: 'lead-sources', label: '07 Lead Sources', icon: Radio, clientVisible: true },
-  { id: 'Billing', hash: 'billing', label: '06 Billing & ROI', icon: CircleDollarSign, clientVisible: true },
+  { id: 'Lead Sources', hash: 'lead-sources', label: 'Lead Sources', icon: Radio, clientVisible: true },
+  { id: 'Billing', hash: 'billing', label: 'Billing & ROI', icon: CircleDollarSign, clientVisible: true },
 
   // Internal Zeerocodes Ops & Setter Tabs
-  { id: 'Admin Control', hash: 'admin-control', label: 'Admin Control', icon: Shield, badge: 'SuperAdmin', clientVisible: false },
+  { id: 'Admin Control', hash: 'admin-control', label: '👑 Admin & Client Provisioning', icon: Shield, badge: 'SuperAdmin', clientVisible: false },
   { id: 'Ops Hub', hash: 'operational', label: 'Executive Ops', icon: LayoutDashboard, badge: 'Live', clientVisible: false },
-  { id: 'Qualify Logic', hash: 'qualify-logic', label: '08 Qualify Logic', icon: Sparkles, badge: 'AI Brain', clientVisible: false },
+  { id: 'Qualify Logic', hash: 'qualify-logic', label: 'Qualify Logic', icon: Sparkles, badge: 'AI Brain', clientVisible: false },
   { id: 'Inbox', hash: 'inbox', label: 'Live Inbox & Stream', icon: MessageSquare, badge: '45s', clientVisible: false },
-  { id: 'Follow-ups', hash: 'follow-ups', label: '03 Follow-ups', icon: Repeat, clientVisible: false },
-  { id: 'Leads', hash: 'leads', label: '05 Lead Database', icon: Inbox, clientVisible: false },
-  { id: 'Revenue', hash: 'analytics', label: '04 Analytics', icon: CircleDollarSign, clientVisible: false },
-  { id: 'Onboarding', hash: 'onboarding', label: 'Onboarding', icon: ShieldCheck, badge: 'Setup', clientVisible: false },
+  { id: 'Follow-ups', hash: 'follow-ups', label: 'Follow-ups', icon: Repeat, clientVisible: false },
+  { id: 'Leads', hash: 'leads', label: 'Lead Database', icon: Inbox, clientVisible: false },
+  { id: 'Revenue', hash: 'analytics', label: 'Analytics', icon: CircleDollarSign, clientVisible: false },
+  { id: 'Onboarding', hash: 'onboarding', label: 'Team Setup', icon: ShieldCheck, badge: 'Setup', clientVisible: false },
   { id: 'Integrations', hash: 'integrations', label: 'Integrations Hub', icon: Radio, clientVisible: false },
   { id: 'Templates', hash: 'templates', label: 'Templates', icon: FileText, clientVisible: false },
   { id: 'Settings', hash: 'settings', label: 'Settings', icon: Shield, clientVisible: false },
@@ -372,7 +372,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 30-Day Subscription Access Status Badge */}
+          {/* 7-Day Trial Status Badge */}
           <div
             onClick={() => openSignInModal('switch')}
             style={{
@@ -385,16 +385,39 @@ export default function App() {
               border: !isSubscriptionExpired ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.4)',
               cursor: 'pointer',
             }}
-            title="Click to manage 30-day subscription"
+            title="Click to manage 7-day trial or subscription"
           >
             <Calendar size={13} color={!isSubscriptionExpired ? '#10b981' : '#f87171'} />
             <span style={{ fontSize: '11px', fontWeight: 700, color: !isSubscriptionExpired ? '#10b981' : '#f87171' }}>
-              {!isSubscriptionExpired ? `30d Access: ${daysRemaining} Days Left` : '⚠️ Subscription Expired'}
+              {!isSubscriptionExpired ? `🟢 7d Trial: ${daysRemaining}d Left` : '⚠️ Trial Ended'}
             </span>
             <span style={{ fontSize: '9.5px', background: 'rgba(0,0,0,0.1)', padding: '1px 4px', borderRadius: '3px', color: 'var(--muted)' }}>
-              Renew
+              Plans
             </span>
           </div>
+
+          {/* Super Admin Direct Trigger if Master Admin or HQ */}
+          {(session.isSuperAdmin || session.tenantId === 'zeerocodes-hq') && (
+            <button
+              onClick={() => navigateTo('Admin Control')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 10px',
+                background: activeTab === 'Admin Control' ? 'var(--ink)' : 'rgba(199, 255, 85, 0.15)',
+                border: '1px solid var(--accent-deep)',
+                borderRadius: '8px',
+                color: activeTab === 'Admin Control' ? 'var(--accent)' : 'var(--ink)',
+                fontSize: '11px',
+                fontWeight: 800,
+                cursor: 'pointer',
+              }}
+              title="Open Super Admin Client Management & Provisioning"
+            >
+              <Shield size={12} color="var(--accent-deep)" /> 👑 Create & Manage Clients
+            </button>
+          )}
 
           {/* Role / View Mode Switcher Pill */}
           <div

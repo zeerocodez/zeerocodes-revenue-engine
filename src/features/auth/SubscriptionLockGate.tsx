@@ -56,15 +56,15 @@ export default function SubscriptionLockGate({
         </div>
 
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '20px', background: 'rgba(239, 68, 68, 0.12)', color: '#f87171', fontSize: '11.5px', fontWeight: 800, marginBottom: '12px' }}>
-          <ShieldAlert size={14} /> 30-DAY ACCESS EXPIRED
+          <ShieldAlert size={14} /> 7-DAY FREE TRIAL ENDED
         </div>
 
         <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#fff', margin: '0 0 10px 0', letterSpacing: '-0.02em' }}>
-          Subscription Renewal Required
+          Activate Full Subscription Access
         </h2>
 
         <p style={{ fontSize: '14px', color: 'var(--dark-text)', lineHeight: 1.55, margin: '0 0 20px 0' }}>
-          The 30-day access period for <strong>{session.tenantName}</strong> has ended. Real-time qualification, WhatsApp outreach, and setter handoffs are currently paused.
+          The 7-day free trial period for <strong>{session.tenantName}</strong> has completed. Real-time qualification, 45s speed to lead, and setter handoffs are currently paused.
         </p>
 
         <div
@@ -90,8 +90,8 @@ export default function SubscriptionLockGate({
             <strong style={{ color: 'var(--accent)' }}>{session.subscriptionPlan}</strong>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px' }}>
-            <span style={{ color: 'var(--dark-muted)' }}>Renewal Cycle:</span>
-            <strong style={{ color: '#f87171' }}>30-Day Recurring</strong>
+            <span style={{ color: 'var(--dark-muted)' }}>Subscription Term:</span>
+            <strong style={{ color: '#4ade80' }}>Monthly Recurring (Cancel Anytime)</strong>
           </div>
         </div>
 
@@ -110,7 +110,7 @@ export default function SubscriptionLockGate({
               gap: '8px',
             }}
           >
-            <RefreshCw size={16} /> Renew 30-Day Subscription Access
+            <RefreshCw size={16} /> Activate Monthly Subscription Access
           </button>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '6px' }}>

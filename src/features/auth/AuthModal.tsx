@@ -47,12 +47,15 @@ export interface ClientAccount {
   subscriptionExpiresAt: string; // ISO string
 }
 
-// Default 30-day expiry helper
-export function create30DaysFromNow(days = 30): string {
+// 7-day trial helper
+export function createTrialDaysFromNow(days = 7): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
   return d.toISOString();
 }
+
+// Backward compatibility alias
+export const create30DaysFromNow = createTrialDaysFromNow;
 
 export const INITIAL_CLIENT_ACCOUNTS: ClientAccount[] = [
   {
@@ -65,7 +68,7 @@ export const INITIAL_CLIENT_ACCOUNTS: ClientAccount[] = [
     industry: 'Revenue Operations & AI Architecture',
     plan: 'SuperAdmin Master Suite (Lifetime)',
     role: 'owner',
-    subscriptionExpiresAt: create30DaysFromNow(365),
+    subscriptionExpiresAt: createTrialDaysFromNow(365),
   },
   {
     id: 'usr_apex',
@@ -75,9 +78,9 @@ export const INITIAL_CLIENT_ACCOUNTS: ClientAccount[] = [
     tenantId: 'tenant_apex_pro',
     tenantName: 'Apex Professional Services',
     industry: 'Professional Services & Consulting',
-    plan: 'Enterprise Scale (30-Day Pass)',
+    plan: 'Enterprise Scale (7-Day Free Trial)',
     role: 'owner',
-    subscriptionExpiresAt: create30DaysFromNow(28),
+    subscriptionExpiresAt: createTrialDaysFromNow(7),
   },
   {
     id: 'usr_acme',
@@ -87,9 +90,9 @@ export const INITIAL_CLIENT_ACCOUNTS: ClientAccount[] = [
     tenantId: 'acme-corp',
     tenantName: 'Acme Growth Labs',
     industry: 'B2B Tech & Services',
-    plan: 'Scale Tier (30-Day Pass)',
+    plan: 'Scale Tier (7-Day Free Trial)',
     role: 'admin',
-    subscriptionExpiresAt: create30DaysFromNow(22),
+    subscriptionExpiresAt: createTrialDaysFromNow(5),
   },
   {
     id: 'usr_lagos',
@@ -99,9 +102,9 @@ export const INITIAL_CLIENT_ACCOUNTS: ClientAccount[] = [
     tenantId: 'lagos-fintech',
     tenantName: 'Lagos FinTech Partners',
     industry: 'Financial Technology',
-    plan: 'Enterprise Plus (30-Day Pass)',
+    plan: 'Enterprise Plus (7-Day Free Trial)',
     role: 'owner',
-    subscriptionExpiresAt: create30DaysFromNow(15),
+    subscriptionExpiresAt: createTrialDaysFromNow(3),
   },
   {
     id: 'usr_sarah_admin',
@@ -113,7 +116,7 @@ export const INITIAL_CLIENT_ACCOUNTS: ClientAccount[] = [
     industry: 'Revenue Operations',
     plan: 'Agency Master Suite',
     role: 'owner',
-    subscriptionExpiresAt: create30DaysFromNow(30),
+    subscriptionExpiresAt: createTrialDaysFromNow(30),
   },
   {
     id: 'usr_expired_demo',
@@ -123,16 +126,16 @@ export const INITIAL_CLIENT_ACCOUNTS: ClientAccount[] = [
     tenantId: 'tenant_expired_demo',
     tenantName: 'Thornton Legal Group',
     industry: 'Corporate Law',
-    plan: 'Scale Tier (Expired)',
+    plan: 'Scale Tier (Trial Ended)',
     role: 'owner',
     subscriptionExpiresAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // Expired 2 days ago
   },
 ];
 
 export function getDaysRemaining(expiryIso?: string): number {
-  if (!expiryIso) return 30;
+  if (!expiryIso) return 7;
   const expiry = new Date(expiryIso).getTime();
-  if (isNaN(expiry)) return 30;
+  if (isNaN(expiry)) return 7;
   const now = Date.now();
   const diffMs = expiry - now;
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
@@ -177,7 +180,7 @@ export default function AuthModal({
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupIndustry, setSignupIndustry] = useState('Professional Services & Consulting');
-  const [signupPlan, setSignupPlan] = useState('Scale Tier (30-Day Pass)');
+  const [signupPlan, setSignupPlan] = useState('7-Day Full Access Free Trial');
   const [signupSuccess, setSignupSuccess] = useState(false);
 
   // Switcher state
@@ -249,7 +252,7 @@ export default function AuthModal({
     const slug = signupOrgName.toLowerCase().replace(/[^a-z0-9]/g, '-');
     const newTenantId = `tenant_${slug}_${Math.random().toString(36).slice(2, 6)}`;
     const newUserId = `usr_${Math.random().toString(36).slice(2, 8)}`;
-    const expiryDate = create30DaysFromNow(30);
+    const expiryDate = createTrialDaysFromNow(7);
 
     const newAccount: ClientAccount = {
       id: newUserId,
@@ -259,7 +262,7 @@ export default function AuthModal({
       tenantId: newTenantId,
       tenantName: signupOrgName.trim(),
       industry: signupIndustry,
-      plan: signupPlan,
+      plan: '7-Day Full Access Free Trial',
       role: 'owner',
       subscriptionExpiresAt: expiryDate,
     };
@@ -275,7 +278,7 @@ export default function AuthModal({
       businessName: newAccount.tenantName,
       temporaryPassword: newAccount.password,
       planName: newAccount.plan,
-      daysActive: 30,
+      daysActive: 7,
     }).catch(console.error);
 
     const newSession: UserSession = {
@@ -286,11 +289,14 @@ export default function AuthModal({
       tenantName: newAccount.tenantName,
       role: newAccount.role,
       isSuperAdmin: false,
-      subscriptionPlan: newAccount.plan,
+      subscriptionPlan: '7-Day Full Access Free Trial',
       subscriptionStartDate: new Date().toISOString(),
       subscriptionExpiresAt: expiryDate,
       subscriptionStatus: 'active',
     };
+
+    // Flag for smart onboarding walkthrough
+    localStorage.setItem('zeero_show_onboarding_tour', 'true');
 
     setSignupSuccess(true);
     setTimeout(() => {
@@ -302,7 +308,7 @@ export default function AuthModal({
 
   const handleRenewSubscription = (daysToAdd = 30) => {
     if (!session) return;
-    const newExpiry = create30DaysFromNow(daysToAdd);
+    const newExpiry = createTrialDaysFromNow(daysToAdd);
     const updatedAccounts = accounts.map((acc) => {
       if (acc.tenantId === session.tenantId) {
         return { ...acc, subscriptionExpiresAt: newExpiry };
@@ -354,11 +360,11 @@ export default function AuthModal({
                 {activeMode === 'signin'
                   ? 'Client Business Sign In'
                   : activeMode === 'signup'
-                  ? 'Register Business & 30-Day Access'
+                  ? 'Register Business & Start 7-Day Free Trial'
                   : 'Switch Client Account'}
               </h3>
               <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--dark-muted)' }}>
-                Protected Dashboard & 30-Day Subscription Access
+                Protected Dashboard & 7-Day Free Trial Access
               </p>
             </div>
           </div>
@@ -411,7 +417,7 @@ export default function AuthModal({
               gap: '5px',
             }}
           >
-            <Sparkles size={12} color="var(--accent)" /> New Business (30-Day Pass)
+            <Sparkles size={12} color="var(--accent)" /> 7-Day Free Trial
           </button>
           <button
             type="button"
@@ -427,7 +433,7 @@ export default function AuthModal({
               cursor: 'pointer',
             }}
           >
-            🏢 Demo Accounts
+            🏢 Demo Accounts & Super Admin
           </button>
         </div>
 
@@ -639,7 +645,7 @@ export default function AuthModal({
 
               {signupSuccess && (
                 <div style={{ padding: '12px', background: 'rgba(199, 255, 85, 0.15)', border: '1px solid var(--accent)', borderRadius: '8px', color: 'var(--accent)', fontSize: '13px', fontWeight: 700, textAlign: 'center' }}>
-                  ✓ Client Business Registered! 30-Day Access Activated. Redirecting...
+                  ✓ Client Business Registered! 7-Day Free Trial Activated. Redirecting to Smart Walkthrough...
                 </div>
               )}
             </div>
@@ -647,7 +653,7 @@ export default function AuthModal({
             <div className="modal-footer" style={{ padding: '14px 22px', borderTop: '1px solid var(--dark-border)' }}>
               <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
               <button type="submit" className="btn-accent" disabled={signupSuccess} style={{ padding: '9px 18px', fontWeight: 700 }}>
-                <Sparkles size={15} /> Create Account & Start 30 Days
+                <Sparkles size={15} /> Create Account & Start 7-Day Free Trial
               </button>
             </div>
           </form>
@@ -657,11 +663,52 @@ export default function AuthModal({
         {activeMode === 'switch' && (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '18px 22px' }}>
+              
+              {/* Master Super Admin Quick Access Callout */}
+              <div
+                onClick={() => {
+                  const superAdminAcc = accounts.find((a) => a.id === 'usr_superadmin_zeerocodes') || accounts[0];
+                  handleQuickLogin(superAdminAcc);
+                  window.location.hash = 'admin-control';
+                }}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg, rgba(199, 255, 85, 0.15) 0%, rgba(20, 28, 22, 0.95) 100%)',
+                  border: '1.5px solid var(--accent)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: 'var(--accent)', color: 'var(--ink)', display: 'grid', placeItems: 'center', fontWeight: 900 }}>
+                    👑
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 800, color: '#fff' }}>
+                      Super Admin Control Plane
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--accent)' }}>
+                      Create new client businesses, set plans & dispatch login credentials via email.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-accent"
+                  style={{ padding: '5px 12px', fontSize: '11px', fontWeight: 800, pointerEvents: 'none' }}
+                >
+                  Open Admin →
+                </button>
+              </div>
+
               <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: 'var(--dark-text)' }}>
-                <Building2 size={14} color="var(--accent)" /> All Registered Client Accounts (30-Day Status)
+                <Building2 size={14} color="var(--accent)" /> All Client Businesses & Trial Status
               </label>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto' }}>
                 {accounts.map((acc) => {
                   const days = getDaysRemaining(acc.subscriptionExpiresAt);
                   const isCurrent = session?.userId === acc.id;
@@ -706,7 +753,7 @@ export default function AuthModal({
                             color: isExpired ? '#f87171' : '#4ade80',
                           }}
                         >
-                          {isExpired ? '⚠️ Expired' : `🟢 ${days} Days Left`}
+                          {isExpired ? '⚠️ Expired' : `🟢 ${days}d Left`}
                         </span>
                       </div>
                     </div>
@@ -715,9 +762,9 @@ export default function AuthModal({
               </div>
 
               {session && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--dark-border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', padding: '10px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--dark-border)' }}>
                   <div>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>Current Organization 30-Day Subscription:</div>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>Active Business Account:</div>
                     <div style={{ fontSize: '11px', color: 'var(--dark-muted)' }}>
                       Expires: {new Date(session.subscriptionExpiresAt).toLocaleDateString()} ({getDaysRemaining(session.subscriptionExpiresAt)} days left)
                     </div>
@@ -728,7 +775,7 @@ export default function AuthModal({
                     className="btn-accent"
                     style={{ padding: '6px 12px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px' }}
                   >
-                    <RefreshCw size={12} /> Renew 30 Days
+                    <RefreshCw size={12} /> Extend 30 Days
                   </button>
                 </div>
               )}
